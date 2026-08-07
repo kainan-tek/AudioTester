@@ -12,6 +12,12 @@
 ## 配置说明
 `audio_configs.json` 含 `player` / `recorder` 两个 section。外部热更新文件放 `/data/audio_configs.json`（需系统权限/root）。标记 `[需系统权限]` 的配置在普通安装下会失败，属预期行为。
 
+## 构建与安装
+```bash
+./gradlew assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
 ## 内置音源替换
 修改 `tools/gen_sample_wav.py` 后重新运行：`python tools/gen_sample_wav.py`
 
@@ -21,6 +27,7 @@
 2. 播放默认配置直接出声（内置音源）；指向 `/data/xx.wav` 的配置可播放真实文件
 3. 播放中切到录音 Tab → 播放停止；录音中切回播放 Tab → 录音停止；无法同时播放+录音
 4. 录音输出 WAV 正常生成（路径/头信息/时长正确）
+   - 提示：默认输出到 App 私有目录，可取 `adb pull /sdcard/Android/data/com.example.audiotester/files/`（或查 logcat 的 `Output file created:` 日志）
 5. 长按 Spinner 重载配置生效（含 JSONC 注释）
 6. 点击 Start 才弹权限；拒绝后有明确提示
 7. 普通安装下系统专属配置报错且不影响其他配置
