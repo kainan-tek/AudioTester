@@ -1,0 +1,40 @@
+plugins {
+    alias(libs.plugins.androidApplication)
+}
+
+android {
+    namespace = "com.example.audiotester"
+    compileSdk = 36
+    ndkVersion = "29.0.14206865"
+    buildToolsVersion = "36.0.0"
+
+    defaultConfig {
+        applicationId = "com.example.audiotester"
+        minSdk = 32
+        versionCode = 30000
+        versionName = "3.0.0"
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+    testOptions {
+        // 允许 JVM 单元测试中使用 android.util.Log 等桩方法（返回默认值）
+        unitTests.isReturnDefaultValues = true
+    }
+}
+
+dependencies {
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.appcompat)
+    implementation(libs.material)
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
+    implementation(libs.androidx.lifecycle.livedata.ktx)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.androidx.viewpager2)
+    testImplementation(libs.junit)
+    // JVM 单元测试使用真实 org.json（android.jar 的 org.json 是桩，会返回 null/NPE）
+    testImplementation("org.json:json:20240303")
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
+}
