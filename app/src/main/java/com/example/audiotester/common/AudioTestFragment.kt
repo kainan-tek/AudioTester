@@ -104,6 +104,10 @@ abstract class AudioTestFragment : Fragment() {
                 requestPermission()
                 return@setOnClickListener
             }
+            // 启动窗口内禁用 Start 防止二次点击（双启动 / "Already playing"→ERROR 陷阱）；
+            // 引擎提交后由 state 观察者恢复按钮状态
+            startButton.isEnabled = false
+            stopButton.isEnabled = true
             viewModel.start()
         }
         stopButton.setOnClickListener { viewModel.stop() }
