@@ -60,4 +60,51 @@ class WavFileTest {
         val reader = WavFile(file.absolutePath)
         assertTrue(!reader.open())
     }
+
+    @Test
+    fun readAfterEof_returnsMinusOne() {
+        val file = File(tempFolder.root, "eof.wav")
+        val writer = WavFile(file.absolutePath)
+        assertTrue(writer.create(8000, 1, 16))
+        assertTrue(writer.writeAudioData(ByteArray(100), 0, 100))
+        assertTrue(writer.close())
+        val reader = WavFile(file.absolutePath)
+        assertTrue(reader.open())
+        assertEquals(100, reader.readData(ByteArray(100), 0, 100))
+        assertEquals(-1, reader.readData(ByteArray(100), 0, 100))
+        reader.close()
+    }
+
+    @Test
+    fun multiWrite_accumulatesAndBackfillsTotal() {
+        val file = File(tempFolder.root, "multi.wav")
+        val writer = WavFile(file.absolutePath)
+        assertTrue(writer.create(48000, 2, 16))
+        assertTrue(writer.writeAudioData(ByteArray(1000), 0, 1000))
+        assertTrue(writer.writeAudioData(ByteArray(2000), 0, 2000))
+        assertTrue(writer.writeAudioData(ByteArray(3000), 0, 3000))
+        assertTrue(writer.close())
+        assertEquals(6000, writer.dataLength)
+        val reader = WavFile(file.absolutePath)
+        assertTrue(reader.open())
+        assertEquals(6000, reader.dataLength)
+        assertEquals(6000, reader.readData(ByteArray(6000), 0, 6000))
+        reader.close()
+    }
+
+    @Test
+    fun openNonexistentFile_returnsFalse() {
+        val reader = WavFile(File(tempFolder.root, "missing.wav").absolutePath)
+        assertTrue(!reader.open())
+    }
+
+    @Test
+    fun createIntoNonexistentDir_createsParents() {
+        val file = File(tempFolder.root, "sub/dir/created.wav")
+        val writer = WavFile(file.absolutePath)
+        assertTrue(writer.create(16000, 1, 16))
+        assertTrue(writer.writeAudioData(ByteArray(320), 0, 320))
+        assertTrue(writer.close())
+        assertTrue(file.exists())
+    }
 }

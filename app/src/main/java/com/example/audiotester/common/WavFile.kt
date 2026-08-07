@@ -78,17 +78,22 @@ class WavFile(private val filePath: String) {
             }
             if (read != WAV_HEADER_SIZE) {
                 Log.e(TAG, "Cannot read complete WAV header")
+                stream.close()
                 return false
             }
             if (String(header, RIFF_OFFSET, 4) != "RIFF") {
                 Log.e(TAG, "Not a valid WAV file format")
+                stream.close()
                 return false
             }
             sampleRate = readLittleEndianInt(header, SAMPLE_RATE_OFFSET)
             channelCount = readLittleEndianShort(header, CHANNEL_COUNT_OFFSET)
             bitsPerSample = readLittleEndianShort(header, BITS_PER_SAMPLE_OFFSET)
             dataLength = readLittleEndianInt(header, DATA_SIZE_OFFSET)
-            if (!validateReadParameters()) return false
+            if (!validateReadParameters()) {
+                stream.close()
+                return false
+            }
 
             fileInputStream = stream
             isReadMode = true
@@ -99,7 +104,7 @@ class WavFile(private val filePath: String) {
             return true
         } catch (e: IOException) {
             Log.e(TAG, "Failed to open WAV stream", e)
-            close()
+            try { stream.close() } catch (_: IOException) {}
             return false
         }
     }
@@ -165,15 +170,15 @@ class WavFile(private val filePath: String) {
     /** 写侧关闭时回填头部大小；读侧关闭流。返回是否成功关闭。 */
     fun close(): Boolean {
         return try {
-            if (isWriteMode && fileOutputStream != null) {
+            if (fileOutputStream != null) {
                 fileOutputStream!!.close()
-                updateWavHeader()
+                if (isWriteMode) updateWavHeader() else true
             } else {
                 fileInputStream?.close()
+                true
             }
-            true
         } catch (e: IOException) {
-            Log.w(TAG, "Error closing WAV file", e)
+            Log.e(TAG, "Error closing WAV file", e)
             false
         } finally {
             fileOutputStream = null
@@ -204,22 +209,28 @@ class WavFile(private val filePath: String) {
         fileOutputStream?.write(header)
     }
 
-    private fun updateWavHeader() {
-        try {
+    private fun updateWavHeader(): Boolean {
+        return try {
             RandomAccessFile(File(filePath), "rw").use { raf ->
                 raf.seek(4)
                 raf.write(createLittleEndianInt(dataLength + WAV_HEADER_SIZE - 8))
                 raf.seek(40)
                 raf.write(createLittleEndianInt(dataLength))
             }
+            true
         } catch (e: IOException) {
-            Log.e(TAG, "Failed to update WAV header")
+            Log.e(TAG, "Failed to update WAV header", e)
+            false
         }
     }
 
     private fun validateReadParameters(): Boolean {
         if (sampleRate <= 0 || channelCount <= 0 || bitsPerSample <= 0 || channelCount > 16) {
             Log.e(TAG, "Invalid audio parameters: ${sampleRate}Hz, ${channelCount}ch, ${bitsPerSample}bit")
+            return false
+        }
+        if (bitsPerSample !in listOf(8, 16, 24, 32)) {
+            Log.e(TAG, "Unsupported bit depth: ${bitsPerSample}bit")
             return false
         }
         return true
