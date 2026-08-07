@@ -34,6 +34,10 @@ class AudioViewModel(
     val currentConfig: LiveData<AudioConfig> = _currentConfig
 
     private val _availableConfigs = MutableLiveData<List<AudioConfig>>()
+    val availableConfigs: LiveData<List<AudioConfig>> = _availableConfigs
+
+    @Volatile
+    private var stopRequested = false
 
     init {
         setupEngineListener()
@@ -92,12 +96,18 @@ class AudioViewModel(
     /** 必须在主线程调用（直接写 LiveData） */
     fun start() {
         if (_state.value == AudioState.ACTIVE) return
+        stopRequested = false
         _errorMessage.value = null
         if (_state.value == AudioState.ERROR) _state.value = AudioState.IDLE
         _statusMessage.value = messages.preparing
 
         viewModelScope.launch(Dispatchers.IO) {
             val success = engine.start()
+            if (success && stopRequested) {
+                // 启动期间被 stop() 取消（如切 Tab 互斥），立即停止
+                engine.stop()
+                return@launch
+            }
             if (!success) {
                 updateUI({
                     if (_state.value != AudioState.ERROR) {
@@ -111,6 +121,7 @@ class AudioViewModel(
 
     /** 必须在主线程调用（直接写 LiveData） */
     fun stop() {
+        stopRequested = true
         if (_state.value != AudioState.ACTIVE) return
         _statusMessage.value = "Stopping..."
         engine.stop()

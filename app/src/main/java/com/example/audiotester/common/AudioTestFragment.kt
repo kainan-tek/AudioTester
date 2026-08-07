@@ -4,7 +4,6 @@ import android.app.AlertDialog
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -88,6 +87,13 @@ abstract class AudioTestFragment : Fragment() {
                 updateInfo()
                 updateSpinnerSelection(it.description)
                 if (configSpinner.adapter == null) setupConfigSpinner()
+            }
+        }
+        viewModel.availableConfigs.observe(viewLifecycleOwner) {
+            if (configSpinner.adapter != null) {
+                // 重载后适配器已存在，重建以反映新配置列表
+                isSpinnerInitialized = false
+                setupConfigSpinner()
             }
         }
     }
@@ -181,15 +187,7 @@ abstract class AudioTestFragment : Fragment() {
     }
 
     private fun reloadConfigurations() {
-        try {
-            viewModel.reloadConfigurations()
-            Toast.makeText(requireContext(), "Configuration reloaded successfully", Toast.LENGTH_SHORT).show()
-            isSpinnerInitialized = false
-            setupConfigSpinner()
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to reload configurations", e)
-            Toast.makeText(requireContext(), "Configuration reload failed: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
+        viewModel.reloadConfigurations()
     }
 
     private fun updateInfo() {
@@ -228,11 +226,11 @@ abstract class AudioTestFragment : Fragment() {
 
     override fun onPause() {
         super.onPause()
-        if (viewModel.isActive()) viewModel.stop()
+        // 切 Tab 时离开页 RESUMED→STARTED 触发 onPause；无条件 stop 以覆盖启动中（start 未提交）的竞态
+        viewModel.stop()
     }
 
     companion object {
-        private const val TAG = "AudioTestFragment"
         private const val PERMISSION_REQUEST_CODE = 1001
     }
 }
