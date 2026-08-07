@@ -30,6 +30,7 @@ object AudioConstants {
 
     // ===== 播放域 =====
 
+    /** AudioTrack usage 常量映射 */
     object Usage {
         const val UNKNOWN = AudioAttributes.USAGE_UNKNOWN
         const val MEDIA = AudioAttributes.USAGE_MEDIA
@@ -47,7 +48,7 @@ object AudioConstants {
         const val GAME = AudioAttributes.USAGE_GAME
         const val ASSISTANT = AudioAttributes.USAGE_ASSISTANT
 
-        // AAOS 专属 usage（需系统权限）
+        // AAOS 专属 usage（需系统应用部署 / 系统签名，而非运行时权限）
         const val EMERGENCY = 1000
         const val SAFETY = 1001
         const val VEHICLE_STATUS = 1002
@@ -72,6 +73,7 @@ object AudioConstants {
         )
     }
 
+    /** AudioTrack contentType 常量映射 */
     object ContentType {
         const val UNKNOWN = AudioAttributes.CONTENT_TYPE_UNKNOWN
         const val MUSIC = AudioAttributes.CONTENT_TYPE_MUSIC
@@ -86,12 +88,14 @@ object AudioConstants {
         )
     }
 
+    /** AudioTrack 传输模式常量映射 */
     object TransferMode {
         const val STREAM = AudioTrack.MODE_STREAM
         const val STATIC = AudioTrack.MODE_STATIC
         val MAP = mapOf(STREAM to "MODE_STREAM", STATIC to "MODE_STATIC")
     }
 
+    /** AudioTrack 性能模式常量映射 */
     object PerformanceMode {
         const val LOW_LATENCY = AudioTrack.PERFORMANCE_MODE_LOW_LATENCY
         const val POWER_SAVING = AudioTrack.PERFORMANCE_MODE_POWER_SAVING
@@ -119,6 +123,7 @@ object AudioConstants {
 
     // ===== 录音域 =====
 
+    /** AudioRecord 音源常量映射 */
     object AudioSource {
         const val DEFAULT = MediaRecorder.AudioSource.DEFAULT
         const val MIC = MediaRecorder.AudioSource.MIC
@@ -133,10 +138,10 @@ object AudioConstants {
         const val VOICE_PERFORMANCE = MediaRecorder.AudioSource.VOICE_PERFORMANCE
 
         // 系统级音源（需系统权限）
-        const val ECHO_REFERENCE = 1997
-        const val RADIO_TUNER = 1998
-        const val HOTWORD = 1999
-        const val ULTRASOUND = 2000
+        const val ECHO_REFERENCE = 1997 // 回声参考：需 RECORD_AUDIO + 系统权限
+        const val RADIO_TUNER = 1998 // 收音机调谐：需系统签名
+        const val HOTWORD = 1999 // 热词检测：需系统签名
+        const val ULTRASOUND = 2000 // 超声波：需 RECORD_AUDIO + 系统权限
 
         val MAP = mapOf(
             DEFAULT to "DEFAULT", MIC to "MIC", VOICE_UPLINK to "VOICE_UPLINK",
@@ -199,11 +204,11 @@ object AudioConstants {
     fun getInputChannelMask(channelCount: Int): Int = when (channelCount) {
         1 -> AudioFormat.CHANNEL_IN_MONO
         2 -> AudioFormat.CHANNEL_IN_STEREO
-        8 -> 0x3FC
-        10 -> 0xFFC
-        12 -> 0x3FFC
-        14 -> 0xFFFC
-        16 -> 0x3FFFC
+        8 -> 0x3FC // 8 声道：6 mic + 2 reference（主动降噪用）
+        10 -> 0xFFC // 10 声道：5.1.4 环绕录音
+        12 -> 0x3FFC // 12 声道：7.1.4 环绕录音
+        14 -> 0xFFFC // 14 声道：扩展环绕
+        16 -> 0x3FFFC // 16 声道：完整配置
         else -> {
             android.util.Log.w("AudioConstants", "Unsupported input channel count: $channelCount, using CHANNEL_IN_STEREO")
             AudioFormat.CHANNEL_IN_STEREO
