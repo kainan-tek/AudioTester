@@ -61,7 +61,7 @@ class AudioViewModel(
             updateUI({
                 _statusMessage.value = "Cannot reload configuration while active"
                 _errorMessage.value = "Please stop the current operation before reloading configuration"
-            })
+            }, clearError = false)
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
@@ -79,16 +79,17 @@ class AudioViewModel(
                         _statusMessage.value = "Configuration file is empty or format error"
                         _errorMessage.value = "No valid audio configuration found"
                     }
-                })
+                }, clearError = false)
             } catch (e: Exception) {
                 updateUI({
                     _statusMessage.value = "Configuration reload failed"
                     _errorMessage.value = "Configuration reload failed: ${e.message}"
-                })
+                }, clearError = false)
             }
         }
     }
 
+    /** 必须在主线程调用（直接写 LiveData） */
     fun start() {
         if (_state.value == AudioState.ACTIVE) return
         _errorMessage.value = null
@@ -108,6 +109,7 @@ class AudioViewModel(
         }
     }
 
+    /** 必须在主线程调用（直接写 LiveData） */
     fun stop() {
         if (_state.value != AudioState.ACTIVE) return
         _statusMessage.value = "Stopping..."
