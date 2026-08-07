@@ -18,6 +18,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.IOException
 
 /**
  * 音频播放器，基于 AudioTrack API，实现 [AudioEngine]。
@@ -118,7 +119,12 @@ class AudioPlayer(private val context: Context) : AudioEngine {
         val path = currentConfig.audioFilePath.ifEmpty { AudioConstants.DEFAULT_AUDIO_FILE }
         wavFile = WavFile(path)
         val opened = if (path.startsWith("asset://")) {
-            wavFile!!.open(context.assets.open(path.removePrefix("asset://")))
+            try {
+                wavFile!!.open(context.assets.open(path.removePrefix("asset://")))
+            } catch (e: IOException) {
+                handleError("${AudioConstants.ErrorTypes.FILE} Cannot open audio asset: $path")
+                return false
+            }
         } else {
             wavFile!!.open()
         }
@@ -295,9 +301,9 @@ class AudioPlayer(private val context: Context) : AudioEngine {
             val buffer = ByteArray(writeBufferSize)
             var totalBytes = 0L
 
-            audioTrack.play()
-
             try {
+                audioTrack.play()
+
                 while (isActive && state == AudioState.ACTIVE) {
                     val bytesRead = wavFile.readData(buffer, 0, buffer.size)
                     if (bytesRead <= 0) {
