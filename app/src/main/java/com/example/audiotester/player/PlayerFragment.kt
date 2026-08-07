@@ -49,6 +49,8 @@ class PlayerFragment : AudioTestFragment() {
             "Invalid audio configuration. Please select a different configuration."
         raw.startsWith("[FOCUS]", ignoreCase = true) ->
             "Unable to play audio. Another app may be using the audio system."
+        raw.contains("Already playing", ignoreCase = true) ->
+            "Playback is already in progress."
         else -> "Playback failed. Please try again."
     }
 }
