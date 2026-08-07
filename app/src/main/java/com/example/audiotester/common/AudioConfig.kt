@@ -33,7 +33,7 @@ data class AudioConfig(
                 val json = ConfigLoader.loadRawText(
                     context, AudioConstants.CONFIG_FILE_PATH, AudioConstants.ASSETS_CONFIG_FILE
                 )
-                parseConfigs(json, section)
+                loadConfigsFromRaw(json, section)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load $section configurations", e)
                 getDefaultConfigs(section)
@@ -42,6 +42,15 @@ data class AudioConfig(
 
         fun reloadConfigs(context: Context, section: String): List<AudioConfig> =
             loadConfigs(context, section)
+
+        /** 解析失败 → 兜底默认（纯函数，可 JVM 测试） */
+        internal fun loadConfigsFromRaw(json: String, section: String): List<AudioConfig> =
+            try {
+                parseConfigs(json, section)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to parse $section configurations", e)
+                getDefaultConfigs(section)
+            }
 
         internal fun parseConfigs(json: String, section: String): List<AudioConfig> {
             val configsArray = JSONObject(json).getJSONArray(section)

@@ -53,4 +53,18 @@ class AudioConfigTest {
         assertEquals("Emergency Fallback - Media Playback", AudioConfig.getDefaultConfigs("player")[0].description)
         assertEquals("Emergency Fallback - Stereo Recording", AudioConfig.getDefaultConfigs("recorder")[0].description)
     }
+
+    @Test
+    fun malformedJson_fallsBackToDefaults() {
+        val configs = AudioConfig.loadConfigsFromRaw("this is not json", "player")
+        assertEquals(1, configs.size)
+        assertEquals("Emergency Fallback - Media Playback", configs[0].description)
+    }
+
+    @Test
+    fun emptySection_returnsEmptyList() {
+        // 空 section 非解析失败：保持空列表（ViewModel 层以 isNotEmpty 兜底提示），与原有行为一致
+        val configs = AudioConfig.parseConfigs(ConfigLoader.stripComments("""{ "player": [], "recorder": [] }"""), "player")
+        assertTrue(configs.isEmpty())
+    }
 }
