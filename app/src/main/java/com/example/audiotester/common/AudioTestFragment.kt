@@ -2,8 +2,11 @@ package com.example.audiotester.common
 
 import android.app.AlertDialog
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -36,18 +39,29 @@ abstract class AudioTestFragment : Fragment() {
     private var isSpinnerInitialized = false
 
     /**
-     * Activity Result API 申请运行时权限（替代已弃用的 requestPermissions / onRequestPermissionsResult）
+     * Activity Result API 申请运行时权限（替代已弃用的 requestPermissions / onRequestPermissionsResult）。
+     * 车机（AAOS）上 Toast 不可见，故用状态栏文本 + 对话框反馈。
      */
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
             val ctx = context ?: return@registerForActivityResult
-            val allGranted = result.values.all { it }
-            val message = if (allGranted) {
-                "Permission granted"
-            } else {
-                "Permission required (${result.values.count { !it }} denied)"
+            val denied = result.filterValues { !it }.keys
+            if (denied.isEmpty()) {
+                statusText.text = "Permission granted"
+                return@registerForActivityResult
             }
-            Toast.makeText(ctx, message, Toast.LENGTH_SHORT).show()
+            val permanent = denied.any { !shouldShowRequestPermissionRationale(it) }
+            val builder = AlertDialog.Builder(ctx)
+                .setTitle(errorDialogTitle)
+                .setMessage(
+                    if (permanent) "权限被永久拒绝，请前往系统设置手动授予后再试。" else "需要权限才能继续。"
+                )
+                .setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
+            if (permanent) {
+                builder.setNegativeButton("前往设置") { _, _ -> openAppSettings() }
+            }
+            builder.show()
+            statusText.text = "Permission denied"
         }
 
     protected abstract fun createEngine(context: Context): AudioEngine
@@ -223,6 +237,13 @@ abstract class AudioTestFragment : Fragment() {
 
     private fun requestPermission() {
         permissionLauncher.launch(requiredPermissions())
+    }
+
+    /** 打开本应用的系统设置页 */
+    private fun openAppSettings() {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+            .setData(Uri.parse("package:${requireContext().packageName}"))
+        startActivity(intent)
     }
 
     // ===== 互斥：切 Tab 时离开页 RESUMED→STARTED 触发 onPause，退后台同理 =====
