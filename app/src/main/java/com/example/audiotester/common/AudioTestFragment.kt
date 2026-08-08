@@ -13,6 +13,7 @@ import android.widget.Button
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
@@ -33,6 +34,21 @@ abstract class AudioTestFragment : Fragment() {
     protected lateinit var configTitleText: TextView
 
     private var isSpinnerInitialized = false
+
+    /**
+     * Activity Result API 申请运行时权限（替代已弃用的 requestPermissions / onRequestPermissionsResult）
+     */
+    private val permissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+            val ctx = context ?: return@registerForActivityResult
+            val allGranted = result.values.all { it }
+            val message = if (allGranted) {
+                "Permission granted"
+            } else {
+                "Permission required (${result.values.count { !it }} denied)"
+            }
+            Toast.makeText(ctx, message, Toast.LENGTH_SHORT).show()
+        }
 
     protected abstract fun createEngine(context: Context): AudioEngine
     protected abstract val section: String
@@ -206,24 +222,7 @@ abstract class AudioTestFragment : Fragment() {
     }
 
     private fun requestPermission() {
-        requestPermissions(requiredPermissions(), PERMISSION_REQUEST_CODE)
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray,
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == PERMISSION_REQUEST_CODE && grantResults.isNotEmpty()) {
-            val allGranted = grantResults.all { it == PackageManager.PERMISSION_GRANTED }
-            val message = if (allGranted) {
-                "Permission granted"
-            } else {
-                "Permission required (${grantResults.count { it != PackageManager.PERMISSION_GRANTED }} denied)"
-            }
-            Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
-        }
+        permissionLauncher.launch(requiredPermissions())
     }
 
     // ===== 互斥：切 Tab 时离开页 RESUMED→STARTED 触发 onPause，退后台同理 =====
@@ -232,9 +231,5 @@ abstract class AudioTestFragment : Fragment() {
         super.onPause()
         // 切 Tab 时离开页 RESUMED→STARTED 触发 onPause；无条件 stop 以覆盖启动中（start 未提交）的竞态
         viewModel.stop()
-    }
-
-    companion object {
-        private const val PERMISSION_REQUEST_CODE = 1001
     }
 }
