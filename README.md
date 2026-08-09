@@ -33,6 +33,8 @@ adb uninstall com.example.audiotester          # 1. 先卸载普通安装
 adb root && adb remount                        # 3. 获取系统分区写权限
 adb push AudioTester.apk /system/priv-app/AudioTester/AudioTester.apk  # 4. 文件名=目录名
 # 5.（建议）在 /system/etc/permissions/ 加 privapp-permissions-com.example.audiotester.xml 白名单
+#    需包含签名权限：CAPTURE_AUDIO_OUTPUT / CAPTURE_AUDIO_HOTWORD
+#    （授予后系统录音音源 ECHO_REFERENCE/RADIO_TUNER/HOTWORD/ULTRASOUND 才有机会工作）
 adb reboot                                      # 6. 重启生效
 ```
 > priv-app 解决 `/data` 访问与存储权限；系统录音音源（ECHO_REFERENCE 等）是否可用取决于车机 AAOS 框架支持，非安装方式决定。

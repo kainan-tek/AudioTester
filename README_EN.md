@@ -31,6 +31,8 @@ adb uninstall com.example.audiotester          # 1. uninstall the normal install
 adb root && adb remount                        # 3. remount system partition for write access
 adb push AudioTester.apk /system/priv-app/AudioTester/AudioTester.apk  # 4. filename must match the dir name
 # 5. (recommended) add privapp-permissions-com.example.audiotester.xml under /system/etc/permissions/
+#    include signature permissions: CAPTURE_AUDIO_OUTPUT / CAPTURE_AUDIO_HOTWORD
+#    (enables system recording sources ECHO_REFERENCE/RADIO_TUNER/HOTWORD/ULTRASOUND)
 adb reboot                                      # 6. reboot to apply
 ```
 > priv-app grants `/data` access and storage permissions; whether the system recording sources (ECHO_REFERENCE etc.) work depends on the AAOS framework support on the device, not the install method.
