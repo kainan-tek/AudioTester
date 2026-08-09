@@ -229,6 +229,10 @@ class AudioPlayer(private val context: Context) : AudioEngine {
     private fun requestAudioFocus(): Boolean {
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
+        // AAOS 系统 usage（>=1000）AudioAttributes 无法表示（@hide，setUsage 会抛 IllegalArgumentException），
+        // 且系统 usage 属车辆关键音频、不依赖普通焦点管理，故跳过焦点请求。
+        if (AudioConstants.getUsage(currentConfig.usage) >= 1000) return true
+
         val focusType = determineFocusType()
 
         val focusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
