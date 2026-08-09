@@ -11,8 +11,8 @@ android {
     defaultConfig {
         applicationId = "com.example.audiotester"
         minSdk = 32
-        versionCode = 30000
-        versionName = "3.0.0"
+        versionCode = 10000
+        versionName = "1.0.0"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
