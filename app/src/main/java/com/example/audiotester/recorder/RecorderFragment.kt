@@ -18,8 +18,8 @@ class RecorderFragment : AudioTestFragment() {
         stopped = "Recording Stopped",
         failed = "Recording Failed",
     )
-    override val startButtonText: CharSequence get() = "Start\nRecord"
-    override val stopButtonText: CharSequence get() = "Stop\nRecord"
+    override val startButtonText: CharSequence get() = "Start"
+    override val stopButtonText: CharSequence get() = "Stop"
     override val configTitle: CharSequence get() = "Recording Configuration"
     override val errorDialogTitle: CharSequence get() = "Recording Error"
 
