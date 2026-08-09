@@ -1,4 +1,15 @@
 <resources>
+    <!-- 基础 -->
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- 语义色板 -->
+    <color name="start_button">#2E7D5B</color>
+    <color name="stop_button">#C62828</color>
+    <color name="status_background">#E3F2FD</color>
+    <color name="status_text">#001C3B</color>
+    <color name="panel_background">#FFFFFF</color>
+    <color name="info_surface">#E0E2E0</color>
+    <color name="text_primary">#1D1B20</color>
+    <color name="text_hint">#444746</color>
 </resources>
