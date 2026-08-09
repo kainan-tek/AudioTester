@@ -1,5 +1,7 @@
 # AudioTester
 
+中文 | [English](README_EN.md)
+
 合并自 AudioPlayer（AudioTrack）与 AudioRecorder（AudioRecord）的音频测试工具。
 
 ## 功能
@@ -11,6 +13,23 @@
 
 ## 配置说明
 `audio_configs.json` 含 `player` / `recorder` 两个 section。外部热更新文件放 `/data/audio_configs.json`（需系统权限/root）。标记 `[需系统权限]` 的配置在普通安装下会失败，属预期行为。
+
+## 部署说明
+**普通安装**（`adb install`）：核心功能可用（内置音源播放、录音到 App 私有目录、assets 配置）。以下系统专属能力**不可用**（预期）：
+- `/data` 配置热更新、`/data/xx.wav` 播放、`/data` 固定录音路径
+- AAOS usage（1000-1004）配置 → `Invalid usage`
+- 系统音源（ECHO_REFERENCE/RADIO_TUNER/HOTWORD/ULTRASOUND）→ `Invalid audio source`
+
+**系统应用部署**（priv-app，userdebug/eng 构建）：
+```bash
+adb uninstall com.example.audiotester          # 1. 先卸载普通安装
+# 2. 用平台系统密钥签名 APK
+adb root && adb remount                        # 3. 获取系统分区写权限
+adb push AudioTester.apk /system/priv-app/AudioTester/AudioTester.apk  # 4. 文件名=目录名
+# 5.（建议）在 /system/etc/permissions/ 加 privapp-permissions-com.example.audiotester.xml 白名单
+adb reboot                                      # 6. 重启生效
+```
+> priv-app 解决 `/data` 访问与存储权限；系统音频 usage/音源是否可用取决于车机 AAOS 框架支持，非安装方式决定。
 
 ## 构建与安装
 ```bash
