@@ -74,39 +74,39 @@
   ],
 
   // ===== 录音配置（Recorder Configs）=====
-  // audioFilePath 省略（空）→ 自动生成到 App 私有目录（普通安装可用）；
-  //   如需固定输出路径，可填 /data/recorded_xx.wav（需系统权限）。
+  // audioFilePath 为空 → 自动生成到 App 私有目录（普通安装可用）；
+  //   填 /data/recorded_xx.wav 等路径则用指定路径（需系统权限/可写位置）。
   // 已知限制：录音 channelCount 仅支持 {1,2,8,10,12,14,16}（输入掩码可表示）；4/6 等会静默录成立体声。
   "recorder": [
     { "audioSource": "DEFAULT", "sampleRate": 48000, "channelCount": 2, "audioFormat": 16,
-      "bufferMultiplier": 2, "description": "Default Audio Source (48kHz Stereo)" },
+      "bufferMultiplier": 2, "audioFilePath": "", "description": "Default Audio Source (48kHz Stereo)" },
     { "audioSource": "MIC", "sampleRate": 48000, "channelCount": 2, "audioFormat": 16,
-      "bufferMultiplier": 2, "description": "Microphone Recording (48kHz Stereo)" },
+      "bufferMultiplier": 2, "audioFilePath": "", "description": "Microphone Recording (48kHz Stereo)" },
     { "audioSource": "VOICE_UPLINK", "sampleRate": 16000, "channelCount": 1, "audioFormat": 16,
-      "bufferMultiplier": 2, "description": "Voice Call Uplink (16kHz Mono)" },
+      "bufferMultiplier": 2, "audioFilePath": "", "description": "Voice Call Uplink (16kHz Mono)" },
     { "audioSource": "VOICE_DOWNLINK", "sampleRate": 16000, "channelCount": 1, "audioFormat": 16,
-      "bufferMultiplier": 2, "description": "Voice Call Downlink (16kHz Mono)" },
+      "bufferMultiplier": 2, "audioFilePath": "", "description": "Voice Call Downlink (16kHz Mono)" },
     { "audioSource": "VOICE_CALL", "sampleRate": 16000, "channelCount": 1, "audioFormat": 16,
-      "bufferMultiplier": 2, "description": "Voice Call Bidirectional (16kHz Mono)" },
+      "bufferMultiplier": 2, "audioFilePath": "", "description": "Voice Call Bidirectional (16kHz Mono)" },
     { "audioSource": "CAMCORDER", "sampleRate": 48000, "channelCount": 2, "audioFormat": 16,
-      "bufferMultiplier": 2, "description": "Camcorder Recording (48kHz Stereo)" },
+      "bufferMultiplier": 2, "audioFilePath": "", "description": "Camcorder Recording (48kHz Stereo)" },
     { "audioSource": "VOICE_RECOGNITION", "sampleRate": 16000, "channelCount": 1, "audioFormat": 16,
-      "bufferMultiplier": 2, "description": "Voice Recognition (16kHz Mono)" },
+      "bufferMultiplier": 2, "audioFilePath": "", "description": "Voice Recognition (16kHz Mono)" },
     { "audioSource": "VOICE_COMMUNICATION", "sampleRate": 16000, "channelCount": 1, "audioFormat": 16,
-      "bufferMultiplier": 2, "description": "Voice Communication (16kHz Mono)" },
+      "bufferMultiplier": 2, "audioFilePath": "", "description": "Voice Communication (16kHz Mono)" },
     { "audioSource": "REMOTE_SUBMIX", "sampleRate": 48000, "channelCount": 2, "audioFormat": 16,
-      "bufferMultiplier": 2, "description": "Remote Submix (48kHz Stereo)" },
+      "bufferMultiplier": 2, "audioFilePath": "", "description": "Remote Submix (48kHz Stereo)" },
     { "audioSource": "UNPROCESSED", "sampleRate": 48000, "channelCount": 2, "audioFormat": 16,
-      "bufferMultiplier": 3, "description": "Unprocessed Audio (48kHz Stereo 16-bit)" },
+      "bufferMultiplier": 3, "audioFilePath": "", "description": "Unprocessed Audio (48kHz Stereo 16-bit)" },
     { "audioSource": "VOICE_PERFORMANCE", "sampleRate": 48000, "channelCount": 1, "audioFormat": 16,
-      "bufferMultiplier": 1, "description": "Voice Performance (48kHz Mono Low-Latency)" },
+      "bufferMultiplier": 1, "audioFilePath": "", "description": "Voice Performance (48kHz Mono Low-Latency)" },
     { "audioSource": "ECHO_REFERENCE", "sampleRate": 48000, "channelCount": 2, "audioFormat": 16,
-      "bufferMultiplier": 2, "description": "Echo Reference (48kHz Stereo) [需系统权限]" },
+      "bufferMultiplier": 2, "audioFilePath": "", "description": "Echo Reference (48kHz Stereo) [需系统权限]" },
     { "audioSource": "RADIO_TUNER", "sampleRate": 48000, "channelCount": 2, "audioFormat": 16,
-      "bufferMultiplier": 2, "description": "Radio Tuner (48kHz Stereo) [需系统权限]" },
+      "bufferMultiplier": 2, "audioFilePath": "", "description": "Radio Tuner (48kHz Stereo) [需系统权限]" },
     { "audioSource": "HOTWORD", "sampleRate": 16000, "channelCount": 1, "audioFormat": 16,
-      "bufferMultiplier": 2, "description": "Hotword Detection (16kHz Mono) [需系统权限]" },
+      "bufferMultiplier": 2, "audioFilePath": "", "description": "Hotword Detection (16kHz Mono) [需系统权限]" },
     { "audioSource": "ULTRASOUND", "sampleRate": 48000, "channelCount": 1, "audioFormat": 16,
-      "bufferMultiplier": 2, "description": "Ultrasound Recording (48kHz Mono) [需系统权限]" }
+      "bufferMultiplier": 2, "audioFilePath": "", "description": "Ultrasound Recording (48kHz Mono) [需系统权限]" }
   ]
 }
