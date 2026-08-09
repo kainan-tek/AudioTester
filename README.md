@@ -5,11 +5,22 @@
 面向 Android Automotive OS（AAOS）车机的音频测试工具，包含基于 AudioTrack 的播放与基于 AudioRecord 的录音功能。
 
 ## 功能
-- 顶部 Tab 切换「播放」/「录音」，两特性互斥（切 Tab 即停）
-- 播放：内置 10s 扫频音源（`asset://sample/48k_2ch_16bit.wav`），默认无需推 WAV；也可配置 `/data/xx.wav`
-- 录音：默认输出到 App 私有目录自动命名；系统应用可配置 `/data/` 固定路径
-- 配置：单个 `assets/audio_configs.json`（JSONC，支持 `//` 与 `/* */` 注释），长按 Spinner 重载
-- 部署：普通安装核心可用；系统应用部署可用系统专属功能（`/data` 热更新等，取决于车机框架支持）
+顶部 Tab 切换「播放」/「录音」，两特性互斥（切 Tab 即停）。
+
+### 播放
+- **17 种音频场景**（媒体/语音通话/通话信令/闹钟/通知/铃声/游戏/导航/辅助/语音助手，及 AAOS 系统类），每种可配 usage/contentType/transferMode/performanceMode
+- 内置 10s 扫频音源（`asset://sample/48k_2ch_16bit.wav`），默认无需推 WAV；也可配置 `/data/xx.wav` 真实文件
+- 完整音频支持：**1-16 声道**（含 5.1/7.1/5.1.4/7.1.4）、**8kHz-192kHz**、**8/16/24/32 位 PCM**
+- 音频焦点管理：焦点被抢占时自动停止
+
+### 录音
+- **15 种音源**（默认/麦克风/语音上行/下行/双向/摄像/语音识别/远程混音/未处理/语音性能/系统级音源）
+- 可配采样率/声道/位深，输出**头信息正确的有效 WAV**
+- 默认输出到 App 私有目录自动命名；系统应用可配置 `/data/` 固定路径
+
+### 配置与部署
+- 单个 `assets/audio_configs.json`（JSONC，支持 `//` 与 `/* */` 注释），长按 Spinner 重载
+- 普通安装核心可用；系统应用部署可用系统专属功能（`/data` 热更新等，取决于车机框架支持）
 
 ## 配置说明
 `audio_configs.json` 含 `player` / `recorder` 两个 section。外部热更新文件放 `/data/audio_configs.json`（需系统权限/root）。标记 `[需系统权限]` 的配置在普通安装下会失败，属预期行为。

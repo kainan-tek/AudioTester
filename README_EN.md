@@ -3,11 +3,22 @@
 An audio testing tool for Android Automotive OS (AAOS) cars, featuring AudioTrack-based playback and AudioRecord-based recording.
 
 ## Features
-- Top tabs switch between **Playback** / **Recording**; the two features are mutually exclusive (switching tabs stops the current one)
-- Playback: built-in 10s sweep source (`asset://sample/48k_2ch_16bit.wav`), no WAV file needed by default; can also use a `/data/xx.wav` file
-- Recording: defaults to an auto-named path in the app's private directory; system apps can configure a fixed `/data/` path
-- Config: single `assets/audio_configs.json` (JSONC, supports `//` and `/* */` comments), long-press the Spinner to reload
-- Deployment: core features work on normal install; system-app install enables system-only features (`/data` hot-reload, etc., depending on device framework support)
+Top tabs switch between **Playback** / **Recording**; the two features are mutually exclusive (switching tabs stops the current one).
+
+### Playback
+- **17 audio scenarios** (media/voice call/call signaling/alarm/notification/ringtone/game/navigation/accessibility/voice assistant, plus AAOS system types), each configurable via usage/contentType/transferMode/performanceMode
+- Built-in 10s sweep source (`asset://sample/48k_2ch_16bit.wav`), no WAV file needed by default; can also use a `/data/xx.wav` real file
+- Full audio support: **1-16 channels** (incl. 5.1/7.1/5.1.4/7.1.4), **8kHz-192kHz**, **8/16/24/32-bit PCM**
+- Audio focus management: auto-stops when focus is taken
+
+### Recording
+- **15 audio sources** (default/mic/voice uplink/downlink/bidirectional/camcorder/voice recognition/remote submix/unprocessed/voice performance/system-level sources)
+- Configurable sample rate/channels/bit depth, outputs **valid WAV with correct header**
+- Defaults to an auto-named path in the app's private directory; system apps can configure a fixed `/data/` path
+
+### Config & Deployment
+- Single `assets/audio_configs.json` (JSONC, supports `//` and `/* */` comments), long-press the Spinner to reload
+- Core features on normal install; system-only features on system-app install (depending on device framework support)
 
 ## Configuration
 `audio_configs.json` has two sections: `player` and `recorder`. For external hot-reload, place the file at `/data/audio_configs.json` (requires system privileges/root). Configs marked `[需系统权限]` (needs system privilege) fail on normal install — expected behavior.
