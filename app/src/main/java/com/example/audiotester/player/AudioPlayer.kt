@@ -256,9 +256,7 @@ class AudioPlayer(private val context: Context) : AudioEngine {
     private fun determineFocusType(): Int {
         val usage = currentConfig.usage
         return when {
-            usage.contains("EMERGENCY") || usage.contains("SAFETY") ->
-                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
-            usage.contains("NAVIGATION") || usage.contains("ANNOUNCEMENT") ->
+            usage.contains("NAVIGATION") ->
                 AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
             usage.contains("VOICE_COMMUNICATION") ->
                 AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
