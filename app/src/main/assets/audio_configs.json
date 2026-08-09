@@ -50,27 +50,7 @@
     { "usage": "USAGE_ASSISTANT", "contentType": "CONTENT_TYPE_SPEECH",
       "transferMode": "MODE_STREAM", "performanceMode": "PERFORMANCE_MODE_POWER_SAVING",
       "bufferMultiplier": 2, "audioFilePath": "asset://sample/48k_2ch_16bit.wav",
-      "description": "Voice Assistant (Power Saving Mode)" },
-    { "usage": "USAGE_EMERGENCY", "contentType": "CONTENT_TYPE_SONIFICATION",
-      "transferMode": "MODE_STREAM", "performanceMode": "PERFORMANCE_MODE_LOW_LATENCY",
-      "bufferMultiplier": 2, "audioFilePath": "asset://sample/48k_2ch_16bit.wav",
-      "description": "Emergency Alert (Low Latency) [需系统权限]" },
-    { "usage": "USAGE_SAFETY", "contentType": "CONTENT_TYPE_SONIFICATION",
-      "transferMode": "MODE_STREAM", "performanceMode": "PERFORMANCE_MODE_LOW_LATENCY",
-      "bufferMultiplier": 2, "audioFilePath": "asset://sample/48k_2ch_16bit.wav",
-      "description": "Safety Warning (Low Latency) [需系统权限]" },
-    { "usage": "USAGE_VEHICLE_STATUS", "contentType": "CONTENT_TYPE_SONIFICATION",
-      "transferMode": "MODE_STREAM", "performanceMode": "PERFORMANCE_MODE_POWER_SAVING",
-      "bufferMultiplier": 2, "audioFilePath": "asset://sample/48k_2ch_16bit.wav",
-      "description": "Vehicle Status Alert (Power Saving Mode) [需系统权限]" },
-    { "usage": "USAGE_ANNOUNCEMENT", "contentType": "CONTENT_TYPE_SPEECH",
-      "transferMode": "MODE_STREAM", "performanceMode": "PERFORMANCE_MODE_POWER_SAVING",
-      "bufferMultiplier": 2, "audioFilePath": "asset://sample/48k_2ch_16bit.wav",
-      "description": "Public Announcement (Power Saving Mode) [需系统权限]" },
-    { "usage": "USAGE_SPEAKER_CLEANUP", "contentType": "CONTENT_TYPE_SONIFICATION",
-      "transferMode": "MODE_STREAM", "performanceMode": "PERFORMANCE_MODE_LOW_LATENCY",
-      "bufferMultiplier": 1, "audioFilePath": "asset://sample/48k_2ch_16bit.wav",
-      "description": "Speaker Cleanup Signal (Low Latency) [需系统权限]" }
+      "description": "Voice Assistant (Power Saving Mode)" }
   ],
 
   // ===== 录音配置（Recorder Configs）=====

@@ -6,7 +6,7 @@ An audio testing tool for Android Automotive OS (AAOS) cars, featuring AudioTrac
 Top tabs switch between **Playback** / **Recording**; the two features are mutually exclusive (switching tabs stops the current one).
 
 ### Playback
-- **17 audio scenarios** (media/voice call/call signaling/alarm/notification/ringtone/game/navigation/accessibility/voice assistant, plus AAOS system types), each configurable via usage/contentType/transferMode/performanceMode
+- **12 audio scenarios** (media/voice call/call signaling/alarm/notification/ringtone/game/navigation/accessibility/voice assistant), each configurable via usage/contentType/transferMode/performanceMode
 - Built-in 10s sweep source (`asset://sample/48k_2ch_16bit.wav`), no WAV file needed by default; can also use a `/data/xx.wav` real file
 - Full audio support: **1-16 channels** (incl. 5.1/7.1/5.1.4/7.1.4), **8kHz-192kHz**, **8/16/24/32-bit PCM**
 - Audio focus management: auto-stops when focus is taken
@@ -22,7 +22,6 @@ Top tabs switch between **Playback** / **Recording**; the two features are mutua
 ## Deployment
 **Normal install** (`adb install`): core features work (built-in source playback, recording to app-private dir, assets config). The following system-only capabilities are **unavailable** (expected):
 - `/data` config hot-reload, `/data/xx.wav` playback, fixed `/data` recording paths
-- AAOS usage (1000-1004) configs → `Invalid usage`
 - System audio sources (ECHO_REFERENCE/RADIO_TUNER/HOTWORD/ULTRASOUND) → `Invalid audio source`
 
 **System-app deployment** (priv-app, userdebug/eng build):
@@ -34,7 +33,7 @@ adb push AudioTester.apk /system/priv-app/AudioTester/AudioTester.apk  # 4. file
 # 5. (recommended) add privapp-permissions-com.example.audiotester.xml under /system/etc/permissions/
 adb reboot                                      # 6. reboot to apply
 ```
-> priv-app grants `/data` access and storage permissions; whether the system audio usages/sources work depends on the AAOS framework support on the device, not the install method.
+> priv-app grants `/data` access and storage permissions; whether the system recording sources (ECHO_REFERENCE etc.) work depends on the AAOS framework support on the device, not the install method.
 
 ## Build & Install
 JDK 21 required; when building on another machine, adjust `org.gradle.java.home` in `gradle.properties` or set `JAVA_HOME`.

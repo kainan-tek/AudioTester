@@ -8,7 +8,7 @@
 顶部 Tab 切换「播放」/「录音」，两特性互斥（切 Tab 即停）。
 
 ### 播放
-- **17 种音频场景**（媒体/语音通话/通话信令/闹钟/通知/铃声/游戏/导航/辅助/语音助手，及 AAOS 系统类），每种可配 usage/contentType/transferMode/performanceMode
+- **12 种音频场景**（媒体/语音通话/通话信令/闹钟/通知/铃声/游戏/导航/辅助/语音助手），每种可配 usage/contentType/transferMode/performanceMode
 - 内置 10s 扫频音源（`asset://sample/48k_2ch_16bit.wav`），默认无需推 WAV；也可配置 `/data/xx.wav` 真实文件
 - 完整音频支持：**1-16 声道**（含 5.1/7.1/5.1.4/7.1.4）、**8kHz-192kHz**、**8/16/24/32 位 PCM**
 - 音频焦点管理：焦点被抢占时自动停止
@@ -24,7 +24,6 @@
 ## 部署说明
 **普通安装**（`adb install`）：核心功能可用（内置音源播放、录音到 App 私有目录、assets 配置）。以下系统专属能力**不可用**（预期）：
 - `/data` 配置热更新、`/data/xx.wav` 播放、`/data` 固定录音路径
-- AAOS usage（1000-1004）配置 → `Invalid usage`
 - 系统音源（ECHO_REFERENCE/RADIO_TUNER/HOTWORD/ULTRASOUND）→ `Invalid audio source`
 
 **系统应用部署**（priv-app，userdebug/eng 构建）：
@@ -36,7 +35,7 @@ adb push AudioTester.apk /system/priv-app/AudioTester/AudioTester.apk  # 4. 文�
 # 5.（建议）在 /system/etc/permissions/ 加 privapp-permissions-com.example.audiotester.xml 白名单
 adb reboot                                      # 6. 重启生效
 ```
-> priv-app 解决 `/data` 访问与存储权限；系统音频 usage/音源是否可用取决于车机 AAOS 框架支持，非安装方式决定。
+> priv-app 解决 `/data` 访问与存储权限；系统录音音源（ECHO_REFERENCE 等）是否可用取决于车机 AAOS 框架支持，非安装方式决定。
 
 ## 构建与安装
 需 JDK 21；如换机构建，需调整 `gradle.properties` 的 `org.gradle.java.home` 或设 `JAVA_HOME`。

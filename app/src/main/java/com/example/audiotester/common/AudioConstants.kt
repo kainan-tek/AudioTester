@@ -48,12 +48,17 @@ object AudioConstants {
         const val GAME = AudioAttributes.USAGE_GAME
         const val ASSISTANT = AudioAttributes.USAGE_ASSISTANT
 
-        // AAOS 专属 usage（需系统应用部署 / 系统签名，而非运行时权限）
-        const val EMERGENCY = 1000
-        const val SAFETY = 1001
-        const val VEHICLE_STATUS = 1002
-        const val ANNOUNCEMENT = 1003
-        const val SPEAKER_CLEANUP = 1004
+        // ---- AAOS 专属 usage（1000-1004）已停用 ----
+        // 原因：AudioTrack 的公开 AudioAttributes.Builder.setUsage() 对 @hide 值（1000-1004）
+        // 一律抛 IllegalArgumentException——即使 priv-app 系统部署 + MODIFY_AUDIO_ROUTING 也无效，
+        // 拒绝发生在 Java 公开 API 的值校验层，与权限无关。须经隐藏 API 反射修改 AudioAttributes
+        // 私有字段 mUsage 才能使用，脆弱且不适合测试工具。AAOS usage 测试请改用 AAudioTester
+        // （native AAudioStreamBuilder_setUsage 天然支持）。其中 SPEAKER_CLEANUP(1004) 亦非平台真实值。
+        // const val EMERGENCY = 1000
+        // const val SAFETY = 1001
+        // const val VEHICLE_STATUS = 1002
+        // const val ANNOUNCEMENT = 1003
+        // const val SPEAKER_CLEANUP = 1004
 
         val MAP = mapOf(
             UNKNOWN to "USAGE_UNKNOWN", MEDIA to "USAGE_MEDIA",
@@ -65,11 +70,12 @@ object AudioConstants {
             ASSISTANCE_ACCESSIBILITY to "USAGE_ASSISTANCE_ACCESSIBILITY",
             ASSISTANCE_NAVIGATION_GUIDANCE to "USAGE_ASSISTANCE_NAVIGATION_GUIDANCE",
             ASSISTANCE_SONIFICATION to "USAGE_ASSISTANCE_SONIFICATION",
-            GAME to "USAGE_GAME", ASSISTANT to "USAGE_ASSISTANT",
-            EMERGENCY to "USAGE_EMERGENCY", SAFETY to "USAGE_SAFETY",
-            VEHICLE_STATUS to "USAGE_VEHICLE_STATUS",
-            ANNOUNCEMENT to "USAGE_ANNOUNCEMENT",
-            SPEAKER_CLEANUP to "USAGE_SPEAKER_CLEANUP"
+            GAME to "USAGE_GAME", ASSISTANT to "USAGE_ASSISTANT"
+            // AAOS usage（1000-1004）见上方注释：公开 API 无法表达，已停用
+            // EMERGENCY to "USAGE_EMERGENCY", SAFETY to "USAGE_SAFETY",
+            // VEHICLE_STATUS to "USAGE_VEHICLE_STATUS",
+            // ANNOUNCEMENT to "USAGE_ANNOUNCEMENT",
+            // SPEAKER_CLEANUP to "USAGE_SPEAKER_CLEANUP"
         )
     }
 
