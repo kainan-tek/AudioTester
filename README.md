@@ -18,10 +18,6 @@
 - 可配采样率/声道/位深，输出**头信息正确的有效 WAV**
 - 默认输出到 App 私有目录自动命名；系统应用可配置 `/data/` 固定路径
 
-### 配置与部署
-- 单个 `assets/audio_configs.json`（JSONC，支持 `//` 与 `/* */` 注释），长按 Spinner 重载
-- 普通安装核心可用；系统应用部署可用系统专属功能（`/data` 热更新等，取决于车机框架支持）
-
 ## 配置说明
 `audio_configs.json` 含 `player` / `recorder` 两个 section。外部热更新文件放 `/data/audio_configs.json`（需系统权限/root）。标记 `[需系统权限]` 的配置在普通安装下会失败，属预期行为。
 

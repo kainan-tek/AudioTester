@@ -16,10 +16,6 @@ Top tabs switch between **Playback** / **Recording**; the two features are mutua
 - Configurable sample rate/channels/bit depth, outputs **valid WAV with correct header**
 - Defaults to an auto-named path in the app's private directory; system apps can configure a fixed `/data/` path
 
-### Config & Deployment
-- Single `assets/audio_configs.json` (JSONC, supports `//` and `/* */` comments), long-press the Spinner to reload
-- Core features on normal install; system-only features on system-app install (depending on device framework support)
-
 ## Configuration
 `audio_configs.json` has two sections: `player` and `recorder`. For external hot-reload, place the file at `/data/audio_configs.json` (requires system privileges/root). Configs marked `[需系统权限]` (needs system privilege) fail on normal install — expected behavior.
 
