@@ -1,13 +1,13 @@
 # AudioTester
 
-An audio testing tool merged from AudioPlayer (AudioTrack) and AudioRecorder (AudioRecord).
+An audio playback/recording testing tool for Android Automotive OS (AAOS) cars, merged from AudioPlayer (AudioTrack) and AudioRecorder (AudioRecord).
 
 ## Features
 - Top tabs switch between **Playback** / **Recording**; the two features are mutually exclusive (switching tabs stops the current one)
 - Playback: built-in 10s sweep source (`asset://sample/48k_2ch_16bit.wav`), no WAV file needed by default; can also use a `/data/xx.wav` file
 - Recording: defaults to an auto-named path in the app's private directory; system apps can configure a fixed `/data/` path
 - Config: single `assets/audio_configs.json` (JSONC, supports `//` and `/* */` comments), long-press the Spinner to reload
-- Deployment: core features work on normal install; full features on system-app install (`/data` hot-reload, AAOS usages, system audio sources require system privileges)
+- Deployment: core features work on normal install; system-app install enables system-only features (`/data` hot-reload, etc., depending on device framework support)
 
 ## Configuration
 `audio_configs.json` has two sections: `player` and `recorder`. For external hot-reload, place the file at `/data/audio_configs.json` (requires system privileges/root). Configs marked `[需系统权限]` (needs system privilege) fail on normal install — expected behavior.
@@ -30,6 +30,7 @@ adb reboot                                      # 6. reboot to apply
 > priv-app grants `/data` access and storage permissions; whether the system audio usages/sources work depends on the AAOS framework support on the device, not the install method.
 
 ## Build & Install
+JDK 21 required; when building on another machine, adjust `org.gradle.java.home` in `gradle.properties` or set `JAVA_HOME`.
 ```bash
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk

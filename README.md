@@ -2,14 +2,14 @@
 
 中文 | [English](README_EN.md)
 
-合并自 AudioPlayer（AudioTrack）与 AudioRecorder（AudioRecord）的音频测试工具。
+面向 Android Automotive OS（AAOS）车机的音频播放/录音测试工具，合并自 AudioPlayer（AudioTrack）与 AudioRecorder（AudioRecord）。
 
 ## 功能
 - 顶部 Tab 切换「播放」/「录音」，两特性互斥（切 Tab 即停）
 - 播放：内置 10s 扫频音源（`asset://sample/48k_2ch_16bit.wav`），默认无需推 WAV；也可配置 `/data/xx.wav`
 - 录音：默认输出到 App 私有目录自动命名；系统应用可配置 `/data/` 固定路径
 - 配置：单个 `assets/audio_configs.json`（JSONC，支持 `//` 与 `/* */` 注释），长按 Spinner 重载
-- 部署：普通安装核心可用；系统应用部署全量可用（`/data` 热更新、AAOS usage、系统音源需系统权限）
+- 部署：普通安装核心可用；系统应用部署可用系统专属功能（`/data` 热更新等，取决于车机框架支持）
 
 ## 配置说明
 `audio_configs.json` 含 `player` / `recorder` 两个 section。外部热更新文件放 `/data/audio_configs.json`（需系统权限/root）。标记 `[需系统权限]` 的配置在普通安装下会失败，属预期行为。
@@ -32,6 +32,7 @@ adb reboot                                      # 6. 重启生效
 > priv-app 解决 `/data` 访问与存储权限；系统音频 usage/音源是否可用取决于车机 AAOS 框架支持，非安装方式决定。
 
 ## 构建与安装
+需 JDK 21；如换机构建，需调整 `gradle.properties` 的 `org.gradle.java.home` 或设 `JAVA_HOME`。
 ```bash
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
