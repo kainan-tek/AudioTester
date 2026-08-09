@@ -2,7 +2,7 @@
 
 中文 | [English](README_EN.md)
 
-面向 Android Automotive OS（AAOS）车机的音频播放/录音测试工具，合并自 AudioPlayer（AudioTrack）与 AudioRecorder（AudioRecord）。
+面向 Android Automotive OS（AAOS）车机的音频测试工具，包含基于 AudioTrack 的播放与基于 AudioRecord 的录音功能。
 
 ## 功能
 - 顶部 Tab 切换「播放」/「录音」，两特性互斥（切 Tab 即停）

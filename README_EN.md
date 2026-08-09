@@ -1,6 +1,6 @@
 # AudioTester
 
-An audio playback/recording testing tool for Android Automotive OS (AAOS) cars, merged from AudioPlayer (AudioTrack) and AudioRecorder (AudioRecord).
+An audio testing tool for Android Automotive OS (AAOS) cars, featuring AudioTrack-based playback and AudioRecord-based recording.
 
 ## Features
 - Top tabs switch between **Playback** / **Recording**; the two features are mutually exclusive (switching tabs stops the current one)
