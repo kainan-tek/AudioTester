@@ -70,7 +70,7 @@ class AudioViewModel(
         }
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val configs = AudioConfig.reloadConfigs(getApplication(), section)
+                val configs = AudioConfig.loadConfigs(getApplication(), section)
                 updateUI({
                     if (configs.isNotEmpty()) {
                         _availableConfigs.value = configs

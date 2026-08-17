@@ -29,7 +29,7 @@ class WavFileTest {
         assertEquals(48000, reader.sampleRate)
         assertEquals(2, reader.channelCount)
         assertEquals(16, reader.bitsPerSample)
-        assertEquals(4096, reader.dataLength)
+        assertEquals(4096L, reader.dataLength)
         assertEquals(4096f / 192000f, reader.duration, 0.001f)
 
         val buffer = ByteArray(4096)
@@ -84,10 +84,10 @@ class WavFileTest {
         assertTrue(writer.writeAudioData(ByteArray(2000), 0, 2000))
         assertTrue(writer.writeAudioData(ByteArray(3000), 0, 3000))
         assertTrue(writer.close())
-        assertEquals(6000, writer.dataLength)
+        assertEquals(6000L, writer.dataLength)
         val reader = WavFile(file.absolutePath)
         assertTrue(reader.open())
-        assertEquals(6000, reader.dataLength)
+        assertEquals(6000L, reader.dataLength)
         assertEquals(6000, reader.readData(ByteArray(6000), 0, 6000))
         reader.close()
     }

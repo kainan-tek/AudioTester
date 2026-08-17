@@ -20,9 +20,13 @@ class WavFile(private val filePath: String) {
         private const val TAG = "WavFile"
         private const val WAV_HEADER_SIZE = 44
         private const val RIFF_OFFSET = 0
+        private const val WAVE_OFFSET = 8
+        private const val FMT_OFFSET = 12
+        private const val AUDIO_FORMAT_OFFSET = 20
         private const val SAMPLE_RATE_OFFSET = 24
         private const val CHANNEL_COUNT_OFFSET = 22
         private const val BITS_PER_SAMPLE_OFFSET = 34
+        private const val DATA_OFFSET = 36
         private const val DATA_SIZE_OFFSET = 40
         private const val FMT_CHUNK_SIZE = 16
         private const val AUDIO_FORMAT_PCM = 1
@@ -32,6 +36,7 @@ class WavFile(private val filePath: String) {
     private var fileOutputStream: FileOutputStream? = null
     private var isReadMode = false
     private var isWriteMode = false
+    private var remainingData = 0L
 
     var sampleRate: Int = 0
         private set
@@ -41,7 +46,7 @@ class WavFile(private val filePath: String) {
         private set
 
     /** 音频数据字节数：读侧解析自头部，写侧为累计写入量 */
-    var dataLength: Int = 0
+    var dataLength: Long = 0
         private set
 
     val byteRate: Int
@@ -81,20 +86,30 @@ class WavFile(private val filePath: String) {
                 stream.close()
                 return false
             }
-            if (String(header, RIFF_OFFSET, 4) != "RIFF") {
+            if (String(header, RIFF_OFFSET, 4) != "RIFF" ||
+                String(header, WAVE_OFFSET, 4) != "WAVE" ||
+                String(header, FMT_OFFSET, 4) != "fmt " ||
+                String(header, DATA_OFFSET, 4) != "data"
+            ) {
                 Log.e(TAG, "Not a valid WAV file format")
+                stream.close()
+                return false
+            }
+            if (readLittleEndianShort(header, AUDIO_FORMAT_OFFSET) != AUDIO_FORMAT_PCM) {
+                Log.e(TAG, "Unsupported WAV format (only PCM=1 is supported)")
                 stream.close()
                 return false
             }
             sampleRate = readLittleEndianInt(header, SAMPLE_RATE_OFFSET)
             channelCount = readLittleEndianShort(header, CHANNEL_COUNT_OFFSET)
             bitsPerSample = readLittleEndianShort(header, BITS_PER_SAMPLE_OFFSET)
-            dataLength = readLittleEndianInt(header, DATA_SIZE_OFFSET)
+            dataLength = readLittleEndianUInt(header, DATA_SIZE_OFFSET)
             if (!validateReadParameters()) {
                 stream.close()
                 return false
             }
 
+            remainingData = dataLength
             fileInputStream = stream
             isReadMode = true
             Log.i(
@@ -112,8 +127,13 @@ class WavFile(private val filePath: String) {
     fun readData(buffer: ByteArray, offset: Int, length: Int): Int {
         if (!isReadMode || fileInputStream == null) return -1
         if (offset < 0 || length < 0 || offset + length > buffer.size) return -1
+        if (remainingData <= 0) return -1
+        // 限制在 data chunk 内，避免读到尾部元数据 chunk
+        val toRead = minOf(length.toLong(), remainingData).toInt()
         return try {
-            fileInputStream!!.read(buffer, offset, length)
+            val n = fileInputStream!!.read(buffer, offset, toRead)
+            if (n > 0) remainingData -= n
+            n
         } catch (e: IOException) {
             Log.e(TAG, "Failed to read data", e)
             close()
@@ -143,7 +163,7 @@ class WavFile(private val filePath: String) {
             fileOutputStream = FileOutputStream(file)
             writeInitialWavHeader()
             isWriteMode = true
-            dataLength = 0
+            dataLength = 0L
             Log.i(TAG, "WAV created: ${sampleRate}Hz, ${channelCount}ch, ${bitsPerSample}bit")
             true
         } catch (e: IOException) {
@@ -185,6 +205,7 @@ class WavFile(private val filePath: String) {
             fileInputStream = null
             isReadMode = false
             isWriteMode = false
+            remainingData = 0
         }
     }
 
@@ -213,9 +234,9 @@ class WavFile(private val filePath: String) {
         return try {
             RandomAccessFile(File(filePath), "rw").use { raf ->
                 raf.seek(4)
-                raf.write(createLittleEndianInt(dataLength + WAV_HEADER_SIZE - 8))
+                raf.write(createLittleEndianInt((dataLength + WAV_HEADER_SIZE - 8).toInt()))
                 raf.seek(40)
-                raf.write(createLittleEndianInt(dataLength))
+                raf.write(createLittleEndianInt(dataLength.toInt()))
             }
             true
         } catch (e: IOException) {
@@ -264,6 +285,12 @@ class WavFile(private val filePath: String) {
     private fun readLittleEndianInt(bytes: ByteArray, offset: Int): Int =
         (bytes[offset].toInt() and 0xFF) or ((bytes[offset + 1].toInt() and 0xFF) shl 8) or
             ((bytes[offset + 2].toInt() and 0xFF) shl 16) or ((bytes[offset + 3].toInt() and 0xFF) shl 24)
+
+    private fun readLittleEndianUInt(bytes: ByteArray, offset: Int): Long =
+        (bytes[offset].toLong() and 0xFFL) or
+            ((bytes[offset + 1].toLong() and 0xFFL) shl 8) or
+            ((bytes[offset + 2].toLong() and 0xFFL) shl 16) or
+            ((bytes[offset + 3].toLong() and 0xFFL) shl 24)
 
     private fun readLittleEndianShort(bytes: ByteArray, offset: Int): Int =
         (bytes[offset].toInt() and 0xFF) or ((bytes[offset + 1].toInt() and 0xFF) shl 8)

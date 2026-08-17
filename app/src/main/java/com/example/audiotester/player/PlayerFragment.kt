@@ -35,7 +35,7 @@ class PlayerFragment : AudioTestFragment() {
     override fun formatInfo(config: AudioConfig): String =
         "Current Config: ${config.description}\n" +
             "Usage: ${config.usage} | ${config.contentType}\n" +
-            "Mode: ${config.performanceMode} | ${config.transferMode}\n" +
+            "Mode: ${config.performanceMode}\n" +
             "File: ${config.audioFilePath.ifEmpty { "Bundled sample (asset://sample/48k_2ch_16bit.wav)" }}"
 
     override fun friendlyErrorMessage(raw: String): String = when {

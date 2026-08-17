@@ -11,7 +11,7 @@ class AudioConfigTest {
           // 播放配置
           "player": [
             { "usage": "USAGE_MEDIA", "contentType": "CONTENT_TYPE_MUSIC",
-              "transferMode": "MODE_STREAM", "performanceMode": "PERFORMANCE_MODE_POWER_SAVING",
+              "performanceMode": "PERFORMANCE_MODE_POWER_SAVING",
               "bufferMultiplier": 2, "audioFilePath": "asset://sample/48k_2ch_16bit.wav",
               "description": "Media Playback" }
           ],

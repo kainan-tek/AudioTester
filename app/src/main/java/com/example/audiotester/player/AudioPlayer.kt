@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.IOException
@@ -176,7 +177,7 @@ class AudioPlayer(private val context: Context) : AudioEngine {
                 AudioFormat.Builder().setSampleRate(wavFile.sampleRate).setChannelMask(channelMask)
                     .setEncoding(audioFormat).build()
             ).setBufferSizeInBytes(bufferSize)
-                .setTransferMode(AudioConstants.getTransferMode(currentConfig.transferMode))
+                .setTransferMode(AudioTrack.MODE_STREAM)
                 .setPerformanceMode(AudioConstants.getPerformanceMode(currentConfig.performanceMode))
                 .build()
 
@@ -212,8 +213,8 @@ class AudioPlayer(private val context: Context) : AudioEngine {
             handleError("${AudioConstants.ErrorTypes.PARAM} Unsupported sample rate: ${wavFile.sampleRate}Hz (supported range: 8000-192000Hz)")
             return false
         }
-        if (!AudioConstants.isValidChannelCount(wavFile.channelCount)) {
-            handleError("${AudioConstants.ErrorTypes.PARAM} Unsupported channel count: ${wavFile.channelCount} (supported range: 1-16 channels)")
+        if (!AudioConstants.isValidOutputChannelCount(wavFile.channelCount)) {
+            handleError("${AudioConstants.ErrorTypes.PARAM} Unsupported channel count: ${wavFile.channelCount} (supported: 1/2/4/6/8/10/12/16)")
             return false
         }
         if (wavFile.channelCount == 12) {
@@ -302,32 +303,46 @@ class AudioPlayer(private val context: Context) : AudioEngine {
 
             val buffer = ByteArray(writeBufferSize)
             var totalBytes = 0L
+            var lastLoggedBytes = 0L
 
             try {
                 audioTrack.play()
 
+                var readLoopEnded = false
                 while (isActive && state == AudioState.ACTIVE) {
                     val bytesRead = wavFile.readData(buffer, 0, buffer.size)
                     if (bytesRead <= 0) {
                         Log.d(TAG, "File reading completed")
+                        readLoopEnded = true
                         break
                     }
 
                     val bytesWritten = audioTrack.write(buffer, 0, bytesRead)
-                    if (bytesWritten < 0) {
+                    if (bytesWritten <= 0) {
                         Log.e(TAG, "AudioTrack write failed: $bytesWritten")
                         break
                     }
 
-                    totalBytes += bytesRead
+                    totalBytes += bytesWritten
 
-                    if (totalBytes % (5 * 1024 * 1024L) == 0L && totalBytes > 0) {
+                    if (totalBytes - lastLoggedBytes >= 5 * 1024 * 1024L) {
                         val mbPlayed = totalBytes / (1024.0 * 1024.0)
                         Log.v(TAG, "Progress: %.1fMB".format(mbPlayed))
+                        lastLoggedBytes = totalBytes
                     }
                 }
 
                 if (state == AudioState.ACTIVE) {
+                    // 正常播完（EOF）时 stop() 会丢弃 track 缓冲里未播完的帧，导致尾部被截。
+                    // 轮询 playbackHeadPosition 排空后再 stop，确保整段音频都被听到。
+                    if (readLoopEnded) {
+                        val bytesPerFrame = wavFile.channelCount * (wavFile.bitsPerSample / 8)
+                        val framesWritten = totalBytes / bytesPerFrame
+                        while (isActive && state == AudioState.ACTIVE &&
+                            audioTrack.playbackHeadPosition < framesWritten) {
+                            delay(1)
+                        }
+                    }
                     val mbTotal = totalBytes / (1024.0 * 1024.0)
                     Log.i(TAG, "Playback completed: %.1fMB".format(mbTotal))
                     stop()

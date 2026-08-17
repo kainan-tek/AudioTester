@@ -61,16 +61,16 @@ object AudioConstants {
         // const val SPEAKER_CLEANUP = 1004
 
         val MAP = mapOf(
-            UNKNOWN to "USAGE_UNKNOWN", MEDIA to "USAGE_MEDIA",
-            VOICE_COMMUNICATION to "USAGE_VOICE_COMMUNICATION",
-            VOICE_COMMUNICATION_SIGNALLING to "USAGE_VOICE_COMMUNICATION_SIGNALLING",
-            ALARM to "USAGE_ALARM", NOTIFICATION to "USAGE_NOTIFICATION",
-            NOTIFICATION_RINGTONE to "USAGE_NOTIFICATION_RINGTONE",
-            NOTIFICATION_EVENT to "USAGE_NOTIFICATION_EVENT",
-            ASSISTANCE_ACCESSIBILITY to "USAGE_ASSISTANCE_ACCESSIBILITY",
-            ASSISTANCE_NAVIGATION_GUIDANCE to "USAGE_ASSISTANCE_NAVIGATION_GUIDANCE",
-            ASSISTANCE_SONIFICATION to "USAGE_ASSISTANCE_SONIFICATION",
-            GAME to "USAGE_GAME", ASSISTANT to "USAGE_ASSISTANT"
+            "USAGE_UNKNOWN" to UNKNOWN, "USAGE_MEDIA" to MEDIA,
+            "USAGE_VOICE_COMMUNICATION" to VOICE_COMMUNICATION,
+            "USAGE_VOICE_COMMUNICATION_SIGNALLING" to VOICE_COMMUNICATION_SIGNALLING,
+            "USAGE_ALARM" to ALARM, "USAGE_NOTIFICATION" to NOTIFICATION,
+            "USAGE_NOTIFICATION_RINGTONE" to NOTIFICATION_RINGTONE,
+            "USAGE_NOTIFICATION_EVENT" to NOTIFICATION_EVENT,
+            "USAGE_ASSISTANCE_ACCESSIBILITY" to ASSISTANCE_ACCESSIBILITY,
+            "USAGE_ASSISTANCE_NAVIGATION_GUIDANCE" to ASSISTANCE_NAVIGATION_GUIDANCE,
+            "USAGE_ASSISTANCE_SONIFICATION" to ASSISTANCE_SONIFICATION,
+            "USAGE_GAME" to GAME, "USAGE_ASSISTANT" to ASSISTANT
         )
     }
 
@@ -83,17 +83,10 @@ object AudioConstants {
         const val SONIFICATION = AudioAttributes.CONTENT_TYPE_SONIFICATION
 
         val MAP = mapOf(
-            UNKNOWN to "CONTENT_TYPE_UNKNOWN", MUSIC to "CONTENT_TYPE_MUSIC",
-            MOVIE to "CONTENT_TYPE_MOVIE", SPEECH to "CONTENT_TYPE_SPEECH",
-            SONIFICATION to "CONTENT_TYPE_SONIFICATION"
+            "CONTENT_TYPE_UNKNOWN" to UNKNOWN, "CONTENT_TYPE_MUSIC" to MUSIC,
+            "CONTENT_TYPE_MOVIE" to MOVIE, "CONTENT_TYPE_SPEECH" to SPEECH,
+            "CONTENT_TYPE_SONIFICATION" to SONIFICATION
         )
-    }
-
-    /** AudioTrack 传输模式常量映射 */
-    object TransferMode {
-        const val STREAM = AudioTrack.MODE_STREAM
-        const val STATIC = AudioTrack.MODE_STATIC
-        val MAP = mapOf(STREAM to "MODE_STREAM", STATIC to "MODE_STATIC")
     }
 
     /** AudioTrack 性能模式常量映射 */
@@ -102,9 +95,9 @@ object AudioConstants {
         const val POWER_SAVING = AudioTrack.PERFORMANCE_MODE_POWER_SAVING
         const val NONE = AudioTrack.PERFORMANCE_MODE_NONE
         val MAP = mapOf(
-            LOW_LATENCY to "PERFORMANCE_MODE_LOW_LATENCY",
-            POWER_SAVING to "PERFORMANCE_MODE_POWER_SAVING",
-            NONE to "PERFORMANCE_MODE_NONE"
+            "PERFORMANCE_MODE_LOW_LATENCY" to LOW_LATENCY,
+            "PERFORMANCE_MODE_POWER_SAVING" to POWER_SAVING,
+            "PERFORMANCE_MODE_NONE" to NONE
         )
     }
 
@@ -114,9 +107,6 @@ object AudioConstants {
     fun getContentType(contentType: String): Int = parseEnumValue(
         ContentType.MAP, contentType, AudioAttributes.CONTENT_TYPE_MUSIC, "ContentType"
     )
-
-    fun getTransferMode(transferMode: String): Int =
-        parseEnumValue(TransferMode.MAP, transferMode, AudioTrack.MODE_STREAM, "TransferMode")
 
     fun getPerformanceMode(performanceMode: String): Int = parseEnumValue(
         PerformanceMode.MAP, performanceMode, AudioTrack.PERFORMANCE_MODE_POWER_SAVING, "PerformanceMode"
@@ -145,13 +135,13 @@ object AudioConstants {
         const val ULTRASOUND = 2000 // 超声波：需 RECORD_AUDIO + 系统权限
 
         val MAP = mapOf(
-            DEFAULT to "DEFAULT", MIC to "MIC", VOICE_UPLINK to "VOICE_UPLINK",
-            VOICE_DOWNLINK to "VOICE_DOWNLINK", VOICE_CALL to "VOICE_CALL",
-            CAMCORDER to "CAMCORDER", VOICE_RECOGNITION to "VOICE_RECOGNITION",
-            VOICE_COMMUNICATION to "VOICE_COMMUNICATION", REMOTE_SUBMIX to "REMOTE_SUBMIX",
-            UNPROCESSED to "UNPROCESSED", VOICE_PERFORMANCE to "VOICE_PERFORMANCE",
-            ECHO_REFERENCE to "ECHO_REFERENCE", RADIO_TUNER to "RADIO_TUNER",
-            HOTWORD to "HOTWORD", ULTRASOUND to "ULTRASOUND"
+            "DEFAULT" to DEFAULT, "MIC" to MIC, "VOICE_UPLINK" to VOICE_UPLINK,
+            "VOICE_DOWNLINK" to VOICE_DOWNLINK, "VOICE_CALL" to VOICE_CALL,
+            "CAMCORDER" to CAMCORDER, "VOICE_RECOGNITION" to VOICE_RECOGNITION,
+            "VOICE_COMMUNICATION" to VOICE_COMMUNICATION, "REMOTE_SUBMIX" to REMOTE_SUBMIX,
+            "UNPROCESSED" to UNPROCESSED, "VOICE_PERFORMANCE" to VOICE_PERFORMANCE,
+            "ECHO_REFERENCE" to ECHO_REFERENCE, "RADIO_TUNER" to RADIO_TUNER,
+            "HOTWORD" to HOTWORD, "ULTRASOUND" to ULTRASOUND
         )
     }
 
@@ -161,13 +151,13 @@ object AudioConstants {
     // ===== 共享 helper =====
 
     private fun parseEnumValue(
-        map: Map<Int, String>,
+        map: Map<String, Int>,
         value: String,
         default: Int,
         typeName: String = "",
     ): Int {
-        val entry = map.entries.find { it.value == value }
-        if (entry != null) return entry.key
+        val result = map[value]
+        if (result != null) return result
         if (value.isNotEmpty()) {
             android.util.Log.w("AudioConstants", "Unknown $typeName value: $value, using default: $default")
         }
@@ -217,6 +207,14 @@ object AudioConstants {
     }
 
     fun isValidSampleRate(rate: Int): Boolean = rate in 8000..192000
-    fun isValidChannelCount(count: Int): Boolean = count in 1..16
+
+    // 与 getInputChannelMask / getOutputChannelMask 的映射保持一致，避免无掩码的声道数
+    // （如输入 4/6、输出 3/5/7）静默降级成 stereo，却仍按原声道数写 WAV 头导致错位。
+    fun isValidInputChannelCount(count: Int): Boolean =
+        count == 1 || count == 2 || count == 8 || count == 10 || count == 12 || count == 14 || count == 16
+
+    fun isValidOutputChannelCount(count: Int): Boolean =
+        count == 1 || count == 2 || count == 4 || count == 6 || count == 8 || count == 10 || count == 12 || count == 16
+
     fun isValidBitDepth(depth: Int): Boolean = depth in listOf(8, 16, 24, 32)
 }

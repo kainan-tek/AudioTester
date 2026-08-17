@@ -11,7 +11,6 @@ import org.json.JSONObject
 data class AudioConfig(
     val usage: String = "USAGE_MEDIA",
     val contentType: String = "CONTENT_TYPE_MUSIC",
-    val transferMode: String = "MODE_STREAM",
     val performanceMode: String = "PERFORMANCE_MODE_POWER_SAVING",
     val audioSource: String = "MIC",
     val sampleRate: Int = 48000,
@@ -40,9 +39,6 @@ data class AudioConfig(
             }
         }
 
-        fun reloadConfigs(context: Context, section: String): List<AudioConfig> =
-            loadConfigs(context, section)
-
         /** 解析失败 → 兜底默认（纯函数，可 JVM 测试） */
         internal fun loadConfigsFromRaw(json: String, section: String): List<AudioConfig> =
             try {
@@ -59,7 +55,6 @@ data class AudioConfig(
                 AudioConfig(
                     usage = c.optString("usage", "USAGE_MEDIA"),
                     contentType = c.optString("contentType", "CONTENT_TYPE_MUSIC"),
-                    transferMode = c.optString("transferMode", "MODE_STREAM"),
                     performanceMode = c.optString("performanceMode", "PERFORMANCE_MODE_POWER_SAVING"),
                     audioSource = c.optString("audioSource", "MIC"),
                     sampleRate = c.optInt("sampleRate", 48000),
@@ -76,7 +71,7 @@ data class AudioConfig(
             AudioConstants.PLAYER_SECTION -> listOf(
                 AudioConfig(
                     usage = "USAGE_MEDIA", contentType = "CONTENT_TYPE_MUSIC",
-                    transferMode = "MODE_STREAM", performanceMode = "PERFORMANCE_MODE_POWER_SAVING",
+                    performanceMode = "PERFORMANCE_MODE_POWER_SAVING",
                     bufferMultiplier = 2, description = "Emergency Fallback - Media Playback"
                 )
             )

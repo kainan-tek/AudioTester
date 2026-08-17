@@ -194,8 +194,8 @@ class AudioRecorder(private val context: Context) : AudioEngine {
                 handleError("${AudioConstants.ErrorTypes.PARAM} Unsupported sample rate: ${sampleRate}Hz")
                 false
             }
-            !AudioConstants.isValidChannelCount(channelCount) -> {
-                handleError("${AudioConstants.ErrorTypes.PARAM} Unsupported channel count: $channelCount")
+            !AudioConstants.isValidInputChannelCount(channelCount) -> {
+                handleError("${AudioConstants.ErrorTypes.PARAM} Unsupported input channel count: $channelCount (supported: 1/2/8/10/12/14/16)")
                 false
             }
             !AudioConstants.isValidBitDepth(bitsPerSample) -> {
@@ -216,6 +216,7 @@ class AudioRecorder(private val context: Context) : AudioEngine {
 
             val buffer = ByteArray(readBufferSize)
             var totalBytes = 0L
+            var lastLoggedBytes = 0L
 
             try {
                 audioRecord.startRecording()
@@ -234,9 +235,10 @@ class AudioRecorder(private val context: Context) : AudioEngine {
                     }
                     totalBytes += bytesRead
 
-                    if (totalBytes % (5 * 1024 * 1024L) == 0L && totalBytes > 0) {
+                    if (totalBytes - lastLoggedBytes >= 5 * 1024 * 1024L) {
                         val mbRecorded = totalBytes / (1024.0 * 1024.0)
                         Log.v(TAG, "Progress: %.1fMB".format(mbRecorded))
+                        lastLoggedBytes = totalBytes
                     }
                 }
 
