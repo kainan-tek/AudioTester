@@ -104,7 +104,7 @@ class WavFile(private val filePath: String) {
             channelCount = readLittleEndianShort(header, CHANNEL_COUNT_OFFSET)
             bitsPerSample = readLittleEndianShort(header, BITS_PER_SAMPLE_OFFSET)
             dataLength = readLittleEndianUInt(header, DATA_SIZE_OFFSET)
-            if (!validateReadParameters()) {
+            if (!validateParameters(sampleRate, channelCount, bitsPerSample)) {
                 stream.close()
                 return false
             }
@@ -152,7 +152,7 @@ class WavFile(private val filePath: String) {
     // ===== 写侧 =====
 
     fun create(sampleRate: Int, channelCount: Int, bitsPerSample: Int): Boolean {
-        if (!validateWriteParameters(sampleRate, channelCount, bitsPerSample)) return false
+        if (!validateParameters(sampleRate, channelCount, bitsPerSample)) return false
         this.sampleRate = sampleRate
         this.channelCount = channelCount
         this.bitsPerSample = bitsPerSample
@@ -245,24 +245,12 @@ class WavFile(private val filePath: String) {
         }
     }
 
-    private fun validateReadParameters(): Boolean {
+    private fun validateParameters(sampleRate: Int, channelCount: Int, bitsPerSample: Int): Boolean {
         if (sampleRate <= 0 || channelCount <= 0 || bitsPerSample <= 0 || channelCount > 16) {
             Log.e(TAG, "Invalid audio parameters: ${sampleRate}Hz, ${channelCount}ch, ${bitsPerSample}bit")
             return false
         }
-        if (bitsPerSample !in listOf(8, 16, 24, 32)) {
-            Log.e(TAG, "Unsupported bit depth: ${bitsPerSample}bit")
-            return false
-        }
-        return true
-    }
-
-    private fun validateWriteParameters(sampleRate: Int, channelCount: Int, bitsPerSample: Int): Boolean {
-        if (sampleRate <= 0 || channelCount <= 0 || bitsPerSample <= 0 || channelCount > 16) {
-            Log.e(TAG, "Invalid audio parameters: ${sampleRate}Hz, ${channelCount}ch, ${bitsPerSample}bit")
-            return false
-        }
-        if (bitsPerSample !in listOf(8, 16, 24, 32)) {
+        if (!AudioConstants.isValidBitDepth(bitsPerSample)) {
             Log.e(TAG, "Unsupported bit depth: ${bitsPerSample}bit")
             return false
         }

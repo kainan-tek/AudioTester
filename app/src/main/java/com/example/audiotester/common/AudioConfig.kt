@@ -50,20 +50,25 @@ data class AudioConfig(
 
         internal fun parseConfigs(json: String, section: String): List<AudioConfig> {
             val configsArray = JSONObject(json).getJSONArray(section)
-            return (0 until configsArray.length()).map { i ->
-                val c = configsArray.getJSONObject(i)
-                AudioConfig(
-                    usage = c.optString("usage", "USAGE_MEDIA"),
-                    contentType = c.optString("contentType", "CONTENT_TYPE_MUSIC"),
-                    performanceMode = c.optString("performanceMode", "PERFORMANCE_MODE_POWER_SAVING"),
-                    audioSource = c.optString("audioSource", "MIC"),
-                    sampleRate = c.optInt("sampleRate", 48000),
-                    channelCount = c.optInt("channelCount", 2),
-                    audioFormat = c.optInt("audioFormat", 16),
-                    bufferMultiplier = c.optInt("bufferMultiplier", 2),
-                    audioFilePath = c.optString("audioFilePath", ""),
-                    description = c.optString("description", "Custom configuration")
-                )
+            // 单条坏配置只跳过该条，不拖垮整个 section 回退 emergency
+            return (0 until configsArray.length()).mapNotNull { i ->
+                runCatching {
+                    val c = configsArray.getJSONObject(i)
+                    AudioConfig(
+                        usage = c.optString("usage", "USAGE_MEDIA"),
+                        contentType = c.optString("contentType", "CONTENT_TYPE_MUSIC"),
+                        performanceMode = c.optString("performanceMode", "PERFORMANCE_MODE_POWER_SAVING"),
+                        audioSource = c.optString("audioSource", "MIC"),
+                        sampleRate = c.optInt("sampleRate", 48000),
+                        channelCount = c.optInt("channelCount", 2),
+                        audioFormat = c.optInt("audioFormat", 16),
+                        bufferMultiplier = c.optInt("bufferMultiplier", 2),
+                        audioFilePath = c.optString("audioFilePath", ""),
+                        description = c.optString("description", "Custom configuration")
+                    )
+                }.onFailure {
+                    Log.e(TAG, "Skipping invalid $section config entry #$i", it)
+                }.getOrNull()
             }
         }
 

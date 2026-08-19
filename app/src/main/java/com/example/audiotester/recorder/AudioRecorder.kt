@@ -217,6 +217,7 @@ class AudioRecorder(private val context: Context) : AudioEngine {
             val buffer = ByteArray(readBufferSize)
             var totalBytes = 0L
             var lastLoggedBytes = 0L
+            var saveFailed = false
 
             try {
                 audioRecord.startRecording()
@@ -229,9 +230,9 @@ class AudioRecorder(private val context: Context) : AudioEngine {
                         break
                     }
 
-                    val writeSuccess = wavFile?.writeAudioData(buffer, 0, bytesRead) ?: false
-                    if (!writeSuccess) {
-                        Log.e(TAG, "Failed to write audio data to file")
+                    if (!saveFailed && wavFile?.writeAudioData(buffer, 0, bytesRead) != true) {
+                        saveFailed = true  // WavFile 失败即自关闭，重试无意义；录音继续，数据不再落盘
+                        Log.e(TAG, "File save failed - recording continues without saving")
                     }
                     totalBytes += bytesRead
 
@@ -243,8 +244,12 @@ class AudioRecorder(private val context: Context) : AudioEngine {
                 }
 
                 if (state == AudioState.ACTIVE) {
-                    val mbRecorded = totalBytes / (1024.0 * 1024.0)
-                    Log.i(TAG, "Recording completed: %.1fMB".format(mbRecorded))
+                    val mbTotal = totalBytes / (1024.0 * 1024.0)
+                    if (saveFailed) {
+                        Log.w(TAG, "Recording finished: %.1fMB captured, file saving aborted".format(mbTotal))
+                    } else {
+                        Log.i(TAG, "Recording completed: %.1fMB".format(mbTotal))
+                    }
                     stop()
                 }
             } catch (e: SecurityException) {

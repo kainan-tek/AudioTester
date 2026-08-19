@@ -37,6 +37,8 @@ abstract class AudioTestFragment : Fragment() {
     protected lateinit var configTitleText: TextView
 
     private var isSpinnerInitialized = false
+    // 权限"永久拒绝"判定需先申请过至少一次：首次拒绝时 rationale 尚不可展示，不能误导向设置页
+    private var permissionRequestedOnce = false
 
     /**
      * Activity Result API 申请运行时权限（替代已弃用的 requestPermissions / onRequestPermissionsResult）。
@@ -50,7 +52,9 @@ abstract class AudioTestFragment : Fragment() {
                 statusText.text = "Permission granted"
                 return@registerForActivityResult
             }
-            val permanent = denied.any { !shouldShowRequestPermissionRationale(it) }
+            val permanent = permissionRequestedOnce &&
+                    denied.any { !shouldShowRequestPermissionRationale(it) }
+            permissionRequestedOnce = true
             val builder = AlertDialog.Builder(ctx)
                 .setTitle(errorDialogTitle)
                 .setMessage(
@@ -104,14 +108,19 @@ abstract class AudioTestFragment : Fragment() {
      */
     private fun initViewModel() {
         val app = requireActivity().application
-        val engine = createEngine(app)
         viewModel = ViewModelProvider(
-            this, AudioViewModel.Factory(app, engine, section, messages)
+            this, AudioViewModel.Factory(app, { ctx -> createEngine(ctx) }, section, messages)
         )[AudioViewModel::class.java]
 
         viewModel.state.observe(viewLifecycleOwner) { updateButtonStates(it) }
         viewModel.statusMessage.observe(viewLifecycleOwner) { statusText.text = it }
-        viewModel.errorMessage.observe(viewLifecycleOwner) { error -> error?.let { handleError(it) } }
+        // 消费即清：防止配置变更时 LiveData 重放最后的错误值再次弹框
+        viewModel.errorMessage.observe(viewLifecycleOwner) { error ->
+            error?.let {
+                handleError(it)
+                viewModel.clearError()
+            }
+        }
         viewModel.currentConfig.observe(viewLifecycleOwner) { config ->
             config?.let {
                 updateInfo()
@@ -212,9 +221,10 @@ abstract class AudioTestFragment : Fragment() {
         AlertDialog.Builder(requireContext())
             .setTitle(errorDialogTitle)
             .setMessage(userMessage)
-            .setPositiveButton("OK") { dialog, _ -> dialog.dismiss(); viewModel.clearError() }
+            // 错误已被观察者消费清除（clearError），对话框关闭只负责恢复状态栏文案
+            .setPositiveButton("OK") { dialog, _ -> dialog.dismiss(); statusText.text = messages.ready }
             .setCancelable(true)
-            .setOnCancelListener { viewModel.clearError() }
+            .setOnCancelListener { statusText.text = messages.ready }
             .show()
         statusText.text = "Error: $userMessage"
         updateButtonStates(AudioState.ERROR)
@@ -231,12 +241,15 @@ abstract class AudioTestFragment : Fragment() {
 
     // ===== 权限（各特性仅 requiredPermissions() 不同，逻辑共用）=====
 
-    private fun hasPermission(): Boolean = requiredPermissions().all {
+    /** 当前配置实际需要的运行时权限（子类可按配置裁剪，如播放内置音源无需存储权限） */
+    protected open fun permissionsForCurrentConfig(): Array<String> = requiredPermissions()
+
+    private fun hasPermission(): Boolean = permissionsForCurrentConfig().all {
         ContextCompat.checkSelfPermission(requireContext(), it) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun requestPermission() {
-        permissionLauncher.launch(requiredPermissions())
+        permissionLauncher.launch(permissionsForCurrentConfig())
     }
 
     /** 打开本应用的系统设置页 */

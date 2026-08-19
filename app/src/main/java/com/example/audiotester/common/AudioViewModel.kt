@@ -69,27 +69,21 @@ class AudioViewModel(
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val configs = AudioConfig.loadConfigs(getApplication(), section)
-                updateUI({
-                    if (configs.isNotEmpty()) {
-                        _availableConfigs.value = configs
-                        val currentDescription = _currentConfig.value?.description
-                        val newConfig = configs.find { it.description == currentDescription } ?: configs[0]
-                        engine.setAudioConfig(newConfig)
-                        _currentConfig.value = newConfig
-                        _statusMessage.value = "Configuration reloaded successfully: ${configs.size} configs"
-                    } else {
-                        _statusMessage.value = "Configuration file is empty or format error"
-                        _errorMessage.value = "No valid audio configuration found"
-                    }
-                }, clearError = false)
-            } catch (e: Exception) {
-                updateUI({
-                    _statusMessage.value = "Configuration reload failed"
-                    _errorMessage.value = "Configuration reload failed: ${e.message}"
-                }, clearError = false)
-            }
+            // loadConfigs 内部已捕获全部异常（失败返回空列表），此处无需再包 try
+            val configs = AudioConfig.loadConfigs(getApplication(), section)
+            updateUI({
+                if (configs.isNotEmpty()) {
+                    _availableConfigs.value = configs
+                    val currentDescription = _currentConfig.value?.description
+                    val newConfig = configs.find { it.description == currentDescription } ?: configs[0]
+                    engine.setAudioConfig(newConfig)
+                    _currentConfig.value = newConfig
+                    _statusMessage.value = "Configuration reloaded successfully: ${configs.size} configs"
+                } else {
+                    _statusMessage.value = "Configuration file is empty or format error"
+                    _errorMessage.value = "No valid audio configuration found"
+                }
+            }, clearError = false)
         }
     }
 
@@ -141,15 +135,9 @@ class AudioViewModel(
         _errorMessage.value = null
         if (_state.value == AudioState.ERROR) {
             _state.value = AudioState.IDLE
-            _statusMessage.value = messages.ready
+            // 不重写 _statusMessage：错误文案需保留在状态栏，恢复时机交给错误对话框的 OK/Cancel
         }
     }
-
-    fun release() {
-        engine.release()
-    }
-
-    fun isActive(): Boolean = engine.isActive()
 
     override fun onCleared() {
         super.onCleared()
@@ -191,12 +179,13 @@ class AudioViewModel(
 
     class Factory(
         private val application: Application,
-        private val engine: AudioEngine,
+        private val engineFactory: (Application) -> AudioEngine,
         private val section: String,
         private val messages: AudioMessages,
     ) : ViewModelProvider.Factory {
+        // engine 与 ViewModel 同步创建：ViewModel 存活复用时（如旋转）不新建 engine
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            AudioViewModel(application, engine, section, messages) as T
+            AudioViewModel(application, engineFactory(application), section, messages) as T
     }
 }

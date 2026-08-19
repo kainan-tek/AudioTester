@@ -220,10 +220,6 @@ class AudioPlayer(private val context: Context) : AudioEngine {
         if (wavFile.channelCount == 12) {
             Log.i(TAG, "Detected 7.1.4 audio configuration (12 channels)")
         }
-        if (!AudioConstants.isValidBitDepth(wavFile.bitsPerSample)) {
-            handleError("${AudioConstants.ErrorTypes.PARAM} Unsupported bit depth: ${wavFile.bitsPerSample}bit (supported: 8/16/24/32bit)")
-            return false
-        }
         return true
     }
 
@@ -318,10 +314,7 @@ class AudioPlayer(private val context: Context) : AudioEngine {
                     }
 
                     val bytesWritten = audioTrack.write(buffer, 0, bytesRead)
-                    if (bytesWritten <= 0) {
-                        Log.e(TAG, "AudioTrack write failed: $bytesWritten")
-                        break
-                    }
+                    if (bytesWritten <= 0) throw IOException("AudioTrack write failed: $bytesWritten")
 
                     totalBytes += bytesWritten
 

@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.os.Build
 import com.example.audiotester.common.AudioConfig
+import com.example.audiotester.common.AudioConstants
 import com.example.audiotester.common.AudioEngine
 import com.example.audiotester.common.AudioMessages
 import com.example.audiotester.common.AudioTestFragment
@@ -32,11 +33,17 @@ class PlayerFragment : AudioTestFragment() {
             arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
 
+    /** 内置音源（空路径/asset://）读 assets 无需存储权限，跳过权限门 */
+    override fun permissionsForCurrentConfig(): Array<String> {
+        val path = viewModel.currentConfig.value?.audioFilePath.orEmpty()
+        return if (path.isEmpty() || path.startsWith("asset://")) emptyArray() else requiredPermissions()
+    }
+
     override fun formatInfo(config: AudioConfig): String =
         "Current Config: ${config.description}\n" +
             "Usage: ${config.usage} | ${config.contentType}\n" +
             "Mode: ${config.performanceMode}\n" +
-            "File: ${config.audioFilePath.ifEmpty { "Bundled sample (asset://sample/48k_2ch_16bit.wav)" }}"
+            "File: ${config.audioFilePath.ifEmpty { "Bundled sample (${AudioConstants.DEFAULT_AUDIO_FILE})" }}"
 
     override fun friendlyErrorMessage(raw: String): String = when {
         raw.startsWith("[FILE]", ignoreCase = true) ->

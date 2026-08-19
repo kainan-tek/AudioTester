@@ -58,7 +58,6 @@ class RecorderFragment : AudioTestFragment() {
         raw.startsWith("[PARAM]", ignoreCase = true) ->
             "Invalid audio configuration. Please select a different configuration."
         raw.contains("Already recording", ignoreCase = true) -> "Recording is already in progress."
-        raw.contains("Not currently recording", ignoreCase = true) -> "No recording is in progress."
         else -> "Recording failed. Please try again."
     }
 }
