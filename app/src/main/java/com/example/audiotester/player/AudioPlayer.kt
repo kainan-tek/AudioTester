@@ -20,6 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.IOException
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * 音频播放器，基于 AudioTrack API，实现 [AudioEngine]。
@@ -122,7 +123,7 @@ class AudioPlayer(private val context: Context) : AudioEngine {
         val opened = if (path.startsWith("asset://")) {
             try {
                 wavFile!!.open(context.assets.open(path.removePrefix("asset://")))
-            } catch (e: IOException) {
+            } catch (_: IOException) {
                 handleError("${AudioConstants.ErrorTypes.FILE} Cannot open audio asset: $path")
                 return false
             }
@@ -333,7 +334,7 @@ class AudioPlayer(private val context: Context) : AudioEngine {
                         val framesWritten = totalBytes / bytesPerFrame
                         while (isActive && state == AudioState.ACTIVE &&
                             audioTrack.playbackHeadPosition < framesWritten) {
-                            delay(1)
+                            delay(1.milliseconds)
                         }
                     }
                     val mbTotal = totalBytes / (1024.0 * 1024.0)

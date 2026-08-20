@@ -180,7 +180,7 @@ class WavFile(private val filePath: String) {
             fileOutputStream!!.write(audioData, offset, length)
             dataLength += length
             true
-        } catch (e: IOException) {
+        } catch (_: IOException) {
             Log.e(TAG, "Failed to write data")
             close()
             false
