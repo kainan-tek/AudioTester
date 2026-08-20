@@ -10,11 +10,9 @@ import android.media.MediaRecorder
  */
 object AudioConstants {
 
-    // 合并配置文件（播放与录音共用单个文件，双 section）
+    // 合并配置文件（播放与录音共用单个文件，双 section："player" / "recorder"）
     const val CONFIG_FILE_PATH = "/data/audio_configs.json"
     const val ASSETS_CONFIG_FILE = "audio_configs.json"
-    const val PLAYER_SECTION = "player"
-    const val RECORDER_SECTION = "recorder"
     const val DEFAULT_AUDIO_FILE = "asset://sample/48k_2ch_16bit.wav"
 
     /**

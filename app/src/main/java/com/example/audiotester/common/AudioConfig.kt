@@ -73,7 +73,7 @@ data class AudioConfig(
         }
 
         internal fun getDefaultConfigs(section: String): List<AudioConfig> = when (section) {
-            AudioConstants.PLAYER_SECTION -> listOf(
+            "player" -> listOf(
                 AudioConfig(
                     usage = "USAGE_MEDIA", contentType = "CONTENT_TYPE_MUSIC",
                     performanceMode = "PERFORMANCE_MODE_POWER_SAVING",
