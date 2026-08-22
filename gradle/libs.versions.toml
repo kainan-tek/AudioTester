@@ -2,9 +2,7 @@
 agp = "9.3.1"
 appcompat = "1.7.1"
 coreKtx = "1.17.0"
-espressoCore = "3.7.0"
 junit = "4.13.2"
-junitVersion = "1.3.0"
 kotlinxCoroutinesAndroid = "1.11.0"
 lifecycle = "2.10.0"
 material = "1.13.0"
@@ -13,8 +11,6 @@ viewpager2 = "1.1.0"
 [libraries]
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
-androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
-androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-lifecycle-livedata-ktx = { group = "androidx.lifecycle", name = "lifecycle-livedata-ktx", version.ref = "lifecycle" }
 androidx-lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "lifecycle" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }

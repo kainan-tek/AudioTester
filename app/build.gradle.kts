@@ -33,8 +33,4 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.viewpager2)
     testImplementation(libs.junit)
-    // JVM 单元测试使用真实 org.json（android.jar 的 org.json 是桩，会返回 null/NPE）
-    testImplementation("org.json:json:20240303")
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
 }

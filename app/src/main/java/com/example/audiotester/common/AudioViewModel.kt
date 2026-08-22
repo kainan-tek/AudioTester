@@ -69,7 +69,7 @@ class AudioViewModel(
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
-            // loadConfigs 内部已捕获全部异常（失败返回空列表），此处无需再包 try
+            // loadConfigs 内部已捕获全部异常（失败回退 emergency 默认配置），此处无需再包 try
             val configs = AudioConfig.loadConfigs(getApplication(), section)
             updateUI({
                 if (configs.isNotEmpty()) {

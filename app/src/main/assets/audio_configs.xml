@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ===== 播放配置（Playback Configs）=====
+  audioFilePath 为空或 asset:// 开头 → 内置音源，无需推 WAV 文件；
+    普通路径如 /data/xx.wav 需系统权限/root 才能读取。
+-->
+<audioConfigs>
+  <player>
+    <config>
+      <usage>USAGE_MEDIA</usage>
+      <contentType>CONTENT_TYPE_MUSIC</contentType>
+      <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
+      <bufferMultiplier>2</bufferMultiplier>
+      <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <description>Media Playback (Power Saving Mode)</description>
+    </config>
+    <config>
+      <usage>USAGE_VOICE_COMMUNICATION</usage>
+      <contentType>CONTENT_TYPE_SPEECH</contentType>
+      <performanceMode>PERFORMANCE_MODE_LOW_LATENCY</performanceMode>
+      <bufferMultiplier>1</bufferMultiplier>
+      <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <description>Voice Communication (Low Latency)</description>
+    </config>
+    <config>
+      <usage>USAGE_VOICE_COMMUNICATION_SIGNALLING</usage>
+      <contentType>CONTENT_TYPE_SONIFICATION</contentType>
+      <performanceMode>PERFORMANCE_MODE_LOW_LATENCY</performanceMode>
+      <bufferMultiplier>1</bufferMultiplier>
+      <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <description>Call Signaling Audio (Low Latency)</description>
+    </config>
+    <config>
+      <usage>USAGE_ALARM</usage>
+      <contentType>CONTENT_TYPE_SONIFICATION</contentType>
+      <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
+      <bufferMultiplier>2</bufferMultiplier>
+      <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <description>Alarm Sound (Power Saving Mode)</description>
+    </config>
+    <config>
+      <usage>USAGE_NOTIFICATION</usage>
+      <contentType>CONTENT_TYPE_SONIFICATION</contentType>
+      <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
+      <bufferMultiplier>2</bufferMultiplier>
+      <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <description>Notification Sound (Power Saving Mode)</description>
+    </config>
+    <config>
+      <usage>USAGE_NOTIFICATION_RINGTONE</usage>
+      <contentType>CONTENT_TYPE_SONIFICATION</contentType>
+      <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
+      <bufferMultiplier>2</bufferMultiplier>
+      <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <description>Ringtone Playback (Power Saving Mode)</description>
+    </config>
+    <config>
+      <usage>USAGE_NOTIFICATION_EVENT</usage>
+      <contentType>CONTENT_TYPE_SONIFICATION</contentType>
+      <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
+      <bufferMultiplier>2</bufferMultiplier>
+      <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <description>Notification Event (Power Saving Mode)</description>
+    </config>
+    <config>
+      <usage>USAGE_ASSISTANCE_ACCESSIBILITY</usage>
+      <contentType>CONTENT_TYPE_SPEECH</contentType>
+      <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
+      <bufferMultiplier>2</bufferMultiplier>
+      <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <description>Accessibility Features (Power Saving Mode)</description>
+    </config>
+    <config>
+      <usage>USAGE_ASSISTANCE_NAVIGATION_GUIDANCE</usage>
+      <contentType>CONTENT_TYPE_SPEECH</contentType>
+      <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
+      <bufferMultiplier>2</bufferMultiplier>
+      <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <description>Navigation Voice (Power Saving Mode)</description>
+    </config>
+    <config>
+      <usage>USAGE_ASSISTANCE_SONIFICATION</usage>
+      <contentType>CONTENT_TYPE_SONIFICATION</contentType>
+      <performanceMode>PERFORMANCE_MODE_LOW_LATENCY</performanceMode>
+      <bufferMultiplier>1</bufferMultiplier>
+      <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <description>System Alert Sound (Low Latency)</description>
+    </config>
+    <config>
+      <usage>USAGE_GAME</usage>
+      <contentType>CONTENT_TYPE_MUSIC</contentType>
+      <performanceMode>PERFORMANCE_MODE_LOW_LATENCY</performanceMode>
+      <bufferMultiplier>1</bufferMultiplier>
+      <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <description>Game Audio (Low Latency)</description>
+    </config>
+    <config>
+      <usage>USAGE_ASSISTANT</usage>
+      <contentType>CONTENT_TYPE_SPEECH</contentType>
+      <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
+      <bufferMultiplier>2</bufferMultiplier>
+      <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <description>Voice Assistant (Power Saving Mode)</description>
+    </config>
+  </player>
+
+  <!--
+    ===== 录音配置（Recorder Configs）=====
+    audioFilePath 为空 → 自动生成到 App 私有目录（普通安装可用）；
+      填 /data/recorded_xx.wav 等路径则用指定路径（需系统权限/可写位置）。
+    已知限制：录音 channelCount 仅支持 {1,2,8,10,12,14,16}（输入掩码可表示）；4/6 等会静默录成立体声。
+  -->
+  <recorder>
+    <config>
+      <audioSource>DEFAULT</audioSource>
+      <sampleRate>48000</sampleRate>
+      <channelCount>2</channelCount>
+      <audioFormat>16</audioFormat>
+      <bufferMultiplier>2</bufferMultiplier>
+      <description>Default Audio Source (48kHz Stereo)</description>
+    </config>
+    <config>
+      <audioSource>MIC</audioSource>
+      <sampleRate>48000</sampleRate>
+      <channelCount>2</channelCount>
+      <audioFormat>16</audioFormat>
+      <bufferMultiplier>2</bufferMultiplier>
+      <description>Microphone Recording (48kHz Stereo)</description>
+    </config>
+    <config>
+      <audioSource>VOICE_UPLINK</audioSource>
+      <sampleRate>16000</sampleRate>
+      <channelCount>1</channelCount>
+      <audioFormat>16</audioFormat>
+      <bufferMultiplier>2</bufferMultiplier>
+      <description>Voice Call Uplink (16kHz Mono)</description>
+    </config>
+    <config>
+      <audioSource>VOICE_DOWNLINK</audioSource>
+      <sampleRate>16000</sampleRate>
+      <channelCount>1</channelCount>
+      <audioFormat>16</audioFormat>
+      <bufferMultiplier>2</bufferMultiplier>
+      <description>Voice Call Downlink (16kHz Mono)</description>
+    </config>
+    <config>
+      <audioSource>VOICE_CALL</audioSource>
+      <sampleRate>16000</sampleRate>
+      <channelCount>1</channelCount>
+      <audioFormat>16</audioFormat>
+      <bufferMultiplier>2</bufferMultiplier>
+      <description>Voice Call Bidirectional (16kHz Mono)</description>
+    </config>
+    <config>
+      <audioSource>CAMCORDER</audioSource>
+      <sampleRate>48000</sampleRate>
+      <channelCount>2</channelCount>
+      <audioFormat>16</audioFormat>
+      <bufferMultiplier>2</bufferMultiplier>
+      <description>Camcorder Recording (48kHz Stereo)</description>
+    </config>
+    <config>
+      <audioSource>VOICE_RECOGNITION</audioSource>
+      <sampleRate>16000</sampleRate>
+      <channelCount>1</channelCount>
+      <audioFormat>16</audioFormat>
+      <bufferMultiplier>2</bufferMultiplier>
+      <description>Voice Recognition (16kHz Mono)</description>
+    </config>
+    <config>
+      <audioSource>VOICE_COMMUNICATION</audioSource>
+      <sampleRate>16000</sampleRate>
+      <channelCount>1</channelCount>
+      <audioFormat>16</audioFormat>
+      <bufferMultiplier>2</bufferMultiplier>
+      <description>Voice Communication (16kHz Mono)</description>
+    </config>
+    <config>
+      <audioSource>REMOTE_SUBMIX</audioSource>
+      <sampleRate>48000</sampleRate>
+      <channelCount>2</channelCount>
+      <audioFormat>16</audioFormat>
+      <bufferMultiplier>2</bufferMultiplier>
+      <description>Remote Submix (48kHz Stereo)</description>
+    </config>
+    <config>
+      <audioSource>UNPROCESSED</audioSource>
+      <sampleRate>48000</sampleRate>
+      <channelCount>2</channelCount>
+      <audioFormat>16</audioFormat>
+      <bufferMultiplier>3</bufferMultiplier>
+      <description>Unprocessed Audio (48kHz Stereo 16-bit)</description>
+    </config>
+    <config>
+      <audioSource>VOICE_PERFORMANCE</audioSource>
+      <sampleRate>48000</sampleRate>
+      <channelCount>1</channelCount>
+      <audioFormat>16</audioFormat>
+      <bufferMultiplier>1</bufferMultiplier>
+      <description>Voice Performance (48kHz Mono Low-Latency)</description>
+    </config>
+    <config>
+      <audioSource>ECHO_REFERENCE</audioSource>
+      <sampleRate>48000</sampleRate>
+      <channelCount>2</channelCount>
+      <audioFormat>16</audioFormat>
+      <bufferMultiplier>2</bufferMultiplier>
+      <description>Echo Reference (48kHz Stereo) [需系统权限]</description>
+    </config>
+    <config>
+      <audioSource>RADIO_TUNER</audioSource>
+      <sampleRate>48000</sampleRate>
+      <channelCount>2</channelCount>
+      <audioFormat>16</audioFormat>
+      <bufferMultiplier>2</bufferMultiplier>
+      <description>Radio Tuner (48kHz Stereo) [需系统权限]</description>
+    </config>
+    <config>
+      <audioSource>HOTWORD</audioSource>
+      <sampleRate>16000</sampleRate>
+      <channelCount>1</channelCount>
+      <audioFormat>16</audioFormat>
+      <bufferMultiplier>2</bufferMultiplier>
+      <description>Hotword Detection (16kHz Mono) [需系统权限]</description>
+    </config>
+    <config>
+      <audioSource>ULTRASOUND</audioSource>
+      <sampleRate>48000</sampleRate>
+      <channelCount>1</channelCount>
+      <audioFormat>16</audioFormat>
+      <bufferMultiplier>2</bufferMultiplier>
+      <description>Ultrasound Recording (48kHz Mono) [需系统权限]</description>
+    </config>
+  </recorder>
+</audioConfigs>
