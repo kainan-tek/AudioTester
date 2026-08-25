@@ -289,14 +289,17 @@ class AudioPlayer(private val context: Context) : AudioEngine {
             val wavFile = wavFile ?: return@launch
             val audioTrack = audioTrack ?: return@launch
 
-            val audioTrackBufferSize =
-                audioTrack.bufferSizeInFrames * wavFile.channelCount * (wavFile.bitsPerSample / 8)
-            val writeBufferSize =
+            val bytesPerFrame = wavFile.channelCount * (wavFile.bitsPerSample / 8)
+            val audioTrackBufferSize = audioTrack.bufferSizeInFrames * bytesPerFrame
+            val rawWriteBufferSize =
                 when (AudioConstants.getPerformanceMode(currentConfig.performanceMode)) {
                     AudioTrack.PERFORMANCE_MODE_LOW_LATENCY -> audioTrackBufferSize / 4
                     AudioTrack.PERFORMANCE_MODE_POWER_SAVING -> audioTrackBufferSize / 2
                     else -> audioTrackBufferSize / 3
                 }
+            // 向下取整到帧倍数：write() 只消费整帧（userSize >= mFrameSize 循环），残帧尾巴
+            // 永远写不进去且返回 0；非帧倍数块会每块丢字节、后续数据整体错位成噪声
+            val writeBufferSize = rawWriteBufferSize / bytesPerFrame * bytesPerFrame
 
             val buffer = ByteArray(writeBufferSize)
             var totalBytes = 0L
@@ -314,9 +317,12 @@ class AudioPlayer(private val context: Context) : AudioEngine {
                         break
                     }
 
+                    // 块已帧对齐：阻塞式 write() 内部排空循环要么消费全部整帧、要么出错
+                    // （部分成功后必接错误码）。短写即异常，响亮失败以暴露平台问题
                     val bytesWritten = audioTrack.write(buffer, 0, bytesRead)
-                    if (bytesWritten <= 0) throw IOException("AudioTrack write failed: $bytesWritten")
-
+                    if (bytesWritten != bytesRead) {
+                        throw IOException("AudioTrack write incomplete: $bytesWritten/$bytesRead")
+                    }
                     totalBytes += bytesWritten
 
                     if (totalBytes - lastLoggedBytes >= 5 * 1024 * 1024L) {
@@ -330,7 +336,6 @@ class AudioPlayer(private val context: Context) : AudioEngine {
                     // 正常播完（EOF）时 stop() 会丢弃 track 缓冲里未播完的帧，导致尾部被截。
                     // 轮询 playbackHeadPosition 排空后再 stop，确保整段音频都被听到。
                     if (readLoopEnded) {
-                        val bytesPerFrame = wavFile.channelCount * (wavFile.bitsPerSample / 8)
                         val framesWritten = totalBytes / bytesPerFrame
                         while (isActive && state == AudioState.ACTIVE &&
                             audioTrack.playbackHeadPosition < framesWritten) {
