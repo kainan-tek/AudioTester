@@ -160,6 +160,7 @@ class AudioPlayer(private val context: Context) : AudioEngine {
             val channelMask = AudioConstants.getOutputChannelMask(wavFile.channelCount)
             val audioFormat = AudioConstants.getFormatFromBitDepth(wavFile.bitsPerSample)
             val minBufferSize = AudioTrack.getMinBufferSize(wavFile.sampleRate, channelMask, audioFormat)
+            Log.i(TAG, "getMinBufferSize: $minBufferSize bytes")
 
             if (minBufferSize == AudioTrack.ERROR_BAD_VALUE) {
                 abandonAudioFocus()
