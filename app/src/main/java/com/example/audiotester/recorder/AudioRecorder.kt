@@ -152,6 +152,8 @@ class AudioRecorder(private val context: Context) : AudioEngine {
                 AudioConstants.getInputChannelMask(currentConfig.channelCount),
                 AudioConstants.getFormatFromBitDepth(currentConfig.audioFormat)
             )
+            Log.i(TAG, "getMinBufferSize: $minBufferSize bytes")
+
             if (minBufferSize <= 0) {
                 handleError("${AudioConstants.ErrorTypes.PARAM} Unsupported audio parameter combination")
                 return false
