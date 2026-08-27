@@ -6,10 +6,11 @@ import android.media.AudioFocusRequest
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import android.os.SystemClock
 import android.util.Log
 import com.example.audiotester.common.AudioConfig
 import com.example.audiotester.common.AudioConstants
-import com.example.audiotester.common.AudioEngine
+import com.example.audiotester.common.AudioEngineBase
 import com.example.audiotester.common.AudioState
 import com.example.audiotester.common.WavFile
 import kotlinx.coroutines.CoroutineScope
@@ -23,46 +24,30 @@ import java.io.IOException
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * 音频播放器，基于 AudioTrack API，实现 [AudioEngine]。
+ * 音频播放器，基于 AudioTrack API。
  */
-class AudioPlayer(private val context: Context) : AudioEngine {
+class AudioPlayer(private val context: Context) : AudioEngineBase() {
 
     companion object {
         private const val TAG = "AudioPlayer"
     }
+
+    override val tag: String get() = TAG
 
     private var audioTrack: AudioTrack? = null
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
     private var wavFile: WavFile? = null
 
-    @Volatile
-    private var state = AudioState.IDLE
     private var playbackJob: Job? = null
     private val playbackScope = CoroutineScope(Dispatchers.IO)
-    private var currentConfig: AudioConfig = AudioConfig()
-
-    private var listener: AudioEngine.Listener? = null
-
-    override fun setListener(listener: AudioEngine.Listener?) {
-        this.listener = listener
-    }
-
-    override fun setAudioConfig(config: AudioConfig) {
-        if (state == AudioState.ACTIVE) {
-            Log.w(TAG, "Cannot change configuration while playing")
-            return
-        }
-        currentConfig = config
-        Log.i(TAG, "Configuration updated: ${config.description}")
-    }
 
     override fun start(): Boolean {
         Log.d(TAG, "Starting playback")
 
         if (state == AudioState.ACTIVE) {
             Log.w(TAG, "Already playing")
-            listener?.onError("Already playing")
+            engineListener?.onError("Already playing")
             return false
         }
         if (state == AudioState.ERROR) {
@@ -75,7 +60,7 @@ class AudioPlayer(private val context: Context) : AudioEngine {
 
             state = AudioState.ACTIVE
             startPlaybackLoop()
-            listener?.onStarted()
+            engineListener?.onStarted()
 
             Log.i(TAG, "Playback started successfully")
             true
@@ -88,31 +73,31 @@ class AudioPlayer(private val context: Context) : AudioEngine {
         }
     }
 
-    override fun stop() {
-        Log.d(TAG, "Stopping playback")
-
-        if (state != AudioState.ACTIVE) return
-
-        state = AudioState.IDLE
+    override fun cancelJob() {
         playbackJob?.cancel()
-        releaseResources()
-        listener?.onStopped()
-
-        Log.i(TAG, "Playback stopped")
     }
 
-    override fun release() {
-        stop()
-        listener = null
+    override fun cancelScope() {
+        playbackScope.cancel()
+    }
+
+    override fun releaseAudioResources() {
         try {
-            playbackScope.cancel()
-        } catch (e: Exception) {
-            Log.w(TAG, "Error canceling playback scope", e)
-        }
-        Log.d(TAG, "AudioPlayer resources released")
-    }
+            audioTrack?.apply {
+                if (this.state == AudioTrack.STATE_INITIALIZED) stop()
+                release()
+            }
+            audioTrack = null
 
-    override fun isActive(): Boolean = state == AudioState.ACTIVE
+            abandonAudioFocus()
+            audioManager = null
+
+            wavFile?.close()
+            wavFile = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing resources", e)
+        }
+    }
 
     /**
      * 打开音频文件。空路径 → 内置音源；asset:// 前缀 → assets；其余 → 普通文件。
@@ -338,9 +323,14 @@ class AudioPlayer(private val context: Context) : AudioEngine {
                     // 轮询 playbackHeadPosition 排空后再 stop，确保整段音频都被听到。
                     if (readLoopEnded) {
                         val framesWritten = totalBytes / bytesPerFrame
+                        // 排空最长 = track 缓冲时长（大 minBufferSize 设备可达秒级），
+                        // deadline 按缓冲时长缩放 + 2s 余量，防 HAL 异常卡死；10ms 轮询足够
+                        val drainMs = audioTrack.bufferSizeInFrames * 1000L / wavFile.sampleRate
+                        val deadline = SystemClock.elapsedRealtime() + drainMs + 2000
                         while (isActive && state == AudioState.ACTIVE &&
-                            audioTrack.playbackHeadPosition < framesWritten) {
-                            delay(1.milliseconds)
+                            audioTrack.playbackHeadPosition < framesWritten &&
+                            SystemClock.elapsedRealtime() < deadline) {
+                            delay(10.milliseconds)
                         }
                     }
                     val mbTotal = totalBytes / (1024.0 * 1024.0)
@@ -353,30 +343,5 @@ class AudioPlayer(private val context: Context) : AudioEngine {
                 }
             }
         }
-    }
-
-    private fun releaseResources() {
-        try {
-            audioTrack?.apply {
-                if (this.state == AudioTrack.STATE_INITIALIZED) stop()
-                release()
-            }
-            audioTrack = null
-
-            abandonAudioFocus()
-            audioManager = null
-
-            wavFile?.close()
-            wavFile = null
-        } catch (e: Exception) {
-            Log.e(TAG, "Error releasing resources", e)
-        }
-    }
-
-    private fun handleError(message: String) {
-        state = AudioState.ERROR
-        Log.e(TAG, "Error: $message")
-        listener?.onError(message)
-        releaseResources()
     }
 }

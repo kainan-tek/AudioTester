@@ -10,8 +10,8 @@ Top tabs switch between **Playback** / **Recording**; the two features are mutua
 
 ### Playback
 
-- **12 audio scenarios** (media/voice call/call signaling/alarm/notification/notification event/ringtone/game/navigation/accessibility/system sound/voice assistant), each configurable via usage/contentType/performanceMode
-- Built-in 10s sweep source (`asset://sample/48k_2ch_16bit.wav`), no WAV file needed by default; can also use a `/data/xx.wav` real file
+- **13 audio scenarios** (media/voice call/call signaling/alarm/notification/notification event/ringtone/game/navigation/accessibility/system sound/voice assistant/96kHz hi-res), each configurable via usage/contentType/performanceMode
+- Built-in 20s pink noise source (`asset://sample/48k_2ch_16bit.wav`), no WAV file needed by default; can also use a `/data/xx.wav` real file
 - Full audio support: **1-16 channels** (incl. 5.1/7.1/5.1.4/7.1.4), **8kHz-192kHz**, **8/16/24/32-bit PCM**
 - Audio focus management: auto-stops when focus is taken
 

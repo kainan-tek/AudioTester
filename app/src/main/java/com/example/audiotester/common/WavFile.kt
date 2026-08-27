@@ -21,15 +21,9 @@ class WavFile(private val filePath: String) {
         private const val WAV_HEADER_SIZE = 44
         private const val RIFF_OFFSET = 0
         private const val WAVE_OFFSET = 8
-        private const val FMT_OFFSET = 12
-        private const val AUDIO_FORMAT_OFFSET = 20
-        private const val SAMPLE_RATE_OFFSET = 24
-        private const val CHANNEL_COUNT_OFFSET = 22
-        private const val BITS_PER_SAMPLE_OFFSET = 34
-        private const val DATA_OFFSET = 36
-        private const val DATA_SIZE_OFFSET = 40
         private const val FMT_CHUNK_SIZE = 16
         private const val AUDIO_FORMAT_PCM = 1
+        private const val WAVE_FORMAT_EXTENSIBLE = 0xFFFE
     }
 
     private var fileInputStream: InputStream? = null
@@ -74,36 +68,69 @@ class WavFile(private val filePath: String) {
         Log.d(TAG, "Opening WAV stream: $filePath")
         close()
         try {
-            val header = ByteArray(WAV_HEADER_SIZE)
-            var read = 0
-            while (read < WAV_HEADER_SIZE) {
-                val n = stream.read(header, read, WAV_HEADER_SIZE - read)
-                if (n < 0) break
-                read += n
-            }
-            if (read != WAV_HEADER_SIZE) {
-                Log.e(TAG, "Cannot read complete WAV header")
+            // RIFF/WAVE 头（12 字节），随后按 chunk 迭代
+            val riff = ByteArray(12)
+            if (!readFully(stream, riff, riff.size)) {
+                Log.e(TAG, "Cannot read WAV RIFF header")
                 stream.close()
                 return false
             }
-            if (String(header, RIFF_OFFSET, 4) != "RIFF" ||
-                String(header, WAVE_OFFSET, 4) != "WAVE" ||
-                String(header, FMT_OFFSET, 4) != "fmt " ||
-                String(header, DATA_OFFSET, 4) != "data"
+            if (String(riff, RIFF_OFFSET, 4) != "RIFF" ||
+                String(riff, WAVE_OFFSET, 4) != "WAVE"
             ) {
-                Log.e(TAG, "Not a valid WAV file format")
+                Log.e(TAG, "Not a valid WAV file")
                 stream.close()
                 return false
             }
-            if (readLittleEndianShort(header, AUDIO_FORMAT_OFFSET) != AUDIO_FORMAT_PCM) {
+
+            // 逐 chunk 扫描：fmt 取参数（兼容 EXTENSIBLE），fact/LIST 等跳过，data 即数据起点
+            var audioFormat = -1
+            while (true) {
+                val header = ByteArray(8)
+                if (!readFully(stream, header, header.size)) {
+                    Log.e(TAG, "Missing data chunk")
+                    stream.close()
+                    return false
+                }
+                val size = readLittleEndianUInt(header, 4)
+                when (String(header, 0, 4)) {
+                    "fmt " -> {
+                        // 40 字节覆盖 EXTENSIBLE 的 cbSize/validBits/channelMask/subformat(GUID 前 2 字节)
+                        val fmtLen = minOf(size, 40L).toInt()
+                        val fmt = ByteArray(fmtLen)
+                        if (fmtLen < 16 || !readFully(stream, fmt, fmtLen)) {
+                            Log.e(TAG, "Invalid fmt chunk")
+                            stream.close()
+                            return false
+                        }
+                        skip(stream, size - fmtLen)
+                        audioFormat = readLittleEndianShort(fmt, 0)
+                        channelCount = readLittleEndianShort(fmt, 2)
+                        sampleRate = readLittleEndianInt(fmt, 4)
+                        bitsPerSample = readLittleEndianShort(fmt, 14)
+                        // WAVE_FORMAT_EXTENSIBLE：真实格式在 subformat GUID 前 2 字节（需至少 26 字节）
+                        if (audioFormat == WAVE_FORMAT_EXTENSIBLE) {
+                            if (fmtLen < 26) {
+                                Log.e(TAG, "Invalid EXTENSIBLE fmt chunk (size $fmtLen)")
+                                stream.close()
+                                return false
+                            }
+                            audioFormat = readLittleEndianShort(fmt, 24)
+                        }
+                    }
+                    "data" -> {
+                        dataLength = size
+                        break
+                    }
+                    else -> skip(stream, size)
+                }
+            }
+
+            if (audioFormat != AUDIO_FORMAT_PCM) {
                 Log.e(TAG, "Unsupported WAV format (only PCM=1 is supported)")
                 stream.close()
                 return false
             }
-            sampleRate = readLittleEndianInt(header, SAMPLE_RATE_OFFSET)
-            channelCount = readLittleEndianShort(header, CHANNEL_COUNT_OFFSET)
-            bitsPerSample = readLittleEndianShort(header, BITS_PER_SAMPLE_OFFSET)
-            dataLength = readLittleEndianUInt(header, DATA_SIZE_OFFSET)
             if (!validateParameters(sampleRate, channelCount, bitsPerSample)) {
                 stream.close()
                 return false
@@ -121,6 +148,26 @@ class WavFile(private val filePath: String) {
             Log.e(TAG, "Failed to open WAV stream", e)
             try { stream.close() } catch (_: IOException) {}
             return false
+        }
+    }
+
+    private fun readFully(stream: InputStream, buf: ByteArray, len: Int): Boolean {
+        var off = 0
+        while (off < len) {
+            val n = stream.read(buf, off, len - off)
+            if (n < 0) return false
+            off += n
+        }
+        return true
+    }
+
+    private fun skip(stream: InputStream, count: Long) {
+        var remaining = count
+        val tmp = ByteArray(8192)
+        while (remaining > 0) {
+            val n = stream.read(tmp, 0, minOf(remaining, tmp.size.toLong()).toInt())
+            if (n < 0) return
+            remaining -= n
         }
     }
 

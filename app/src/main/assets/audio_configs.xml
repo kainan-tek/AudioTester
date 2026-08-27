@@ -15,6 +15,14 @@
       <description>Media Playback (Power Saving Mode)</description>
     </config>
     <config>
+      <usage>USAGE_MEDIA</usage>
+      <contentType>CONTENT_TYPE_MUSIC</contentType>
+      <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
+      <bufferMultiplier>4</bufferMultiplier>
+      <audioFilePath>/data/96k_2ch_32bit.wav</audioFilePath>
+      <description>Hi-Res Media Playback (96kHz Stereo 32-bit)</description>
+    </config>
+    <config>
       <usage>USAGE_VOICE_COMMUNICATION</usage>
       <contentType>CONTENT_TYPE_SPEECH</contentType>
       <performanceMode>PERFORMANCE_MODE_LOW_LATENCY</performanceMode>

@@ -107,4 +107,118 @@ class WavFileTest {
         assertTrue(writer.close())
         assertTrue(file.exists())
     }
+
+    // 手拼 WAV 头的小端写入 helper（测试专用）
+    private fun ByteArray.putLeShort(offset: Int, value: Int) {
+        this[offset] = (value and 0xFF).toByte()
+        this[offset + 1] = ((value shr 8) and 0xFF).toByte()
+    }
+
+    private fun ByteArray.putLeInt(offset: Int, value: Int) {
+        this[offset] = (value and 0xFF).toByte()
+        this[offset + 1] = ((value shr 8) and 0xFF).toByte()
+        this[offset + 2] = ((value shr 16) and 0xFF).toByte()
+        this[offset + 3] = ((value shr 24) and 0xFF).toByte()
+    }
+
+    @Test
+    fun openExtensibleWav_parsesParameters() {
+        // WAVE_FORMAT_EXTENSIBLE：40 字节 fmt + subformat GUID（前 2 字节 = PCM）
+        val data = ByteArray(8) { (it + 1).toByte() }
+        val header = ByteArray(68).also { h ->
+            "RIFF".toByteArray().copyInto(h, 0)
+            h.putLeInt(4, 60 + data.size)     // riff size = fileSize - 8
+            "WAVE".toByteArray().copyInto(h, 8)
+            "fmt ".toByteArray().copyInto(h, 12)
+            h.putLeInt(16, 40)                // fmt chunk size
+            h.putLeShort(20, 0xFFFE)          // WAVE_FORMAT_EXTENSIBLE
+            h.putLeShort(22, 2)               // channels
+            h.putLeInt(24, 96000)             // sample rate
+            h.putLeInt(28, 96000 * 2 * 4)     // byte rate
+            h.putLeShort(32, 8)               // block align
+            h.putLeShort(34, 32)              // bits per sample
+            h.putLeShort(36, 22)              // cbSize
+            h.putLeShort(38, 32)              // valid bits
+            h.putLeInt(40, 0x3)               // channel mask (stereo)
+            // KSDATAFORMAT_SUBTYPE_PCM：前 2 字节 0x0001 = PCM
+            byteArrayOf(0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
+                0x80.toByte(), 0x00, 0x00, 0xAA.toByte(), 0x00, 0x38, 0x9B.toByte(), 0x71).copyInto(h, 44)
+            "data".toByteArray().copyInto(h, 60)
+            h.putLeInt(64, data.size)
+        }
+        val file = File(tempFolder.root, "extensible.wav")
+        file.writeBytes(header + data)
+
+        val reader = WavFile(file.absolutePath)
+        assertTrue(reader.open())
+        assertEquals(96000, reader.sampleRate)
+        assertEquals(2, reader.channelCount)
+        assertEquals(32, reader.bitsPerSample)
+        assertEquals(data.size.toLong(), reader.dataLength)
+        val buf = ByteArray(8)
+        assertEquals(8, reader.readData(buf, 0, 8))
+        assertArrayEquals(data, buf)
+        reader.close()
+    }
+
+    @Test
+    fun openPcmWithExtraChunk_skipsFact() {
+        // 经典 PCM + fact chunk：data 不在偏移 36，靠 chunk 扫描跳过 fact
+        val data = ByteArray(16) { it.toByte() }
+        val header = ByteArray(56).also { h ->
+            "RIFF".toByteArray().copyInto(h, 0)
+            h.putLeInt(4, 48 + data.size)     // riff size = fileSize - 8
+            "WAVE".toByteArray().copyInto(h, 8)
+            "fmt ".toByteArray().copyInto(h, 12)
+            h.putLeInt(16, 16)                // fmt chunk size
+            h.putLeShort(20, 1)               // PCM
+            h.putLeShort(22, 1)               // channels
+            h.putLeInt(24, 16000)             // sample rate
+            h.putLeInt(28, 32000)             // byte rate
+            h.putLeShort(32, 2)               // block align
+            h.putLeShort(34, 16)              // bits per sample
+            "fact".toByteArray().copyInto(h, 36)
+            h.putLeInt(40, 4)
+            byteArrayOf(1, 0, 0, 0).copyInto(h, 44)
+            "data".toByteArray().copyInto(h, 48)
+            h.putLeInt(52, data.size)
+        }
+        val file = File(tempFolder.root, "fact.wav")
+        file.writeBytes(header + data)
+
+        val reader = WavFile(file.absolutePath)
+        assertTrue(reader.open())
+        assertEquals(16000, reader.sampleRate)
+        assertEquals(1, reader.channelCount)
+        assertEquals(16, reader.bitsPerSample)
+        assertEquals(data.size.toLong(), reader.dataLength)
+        assertEquals(16, reader.readData(ByteArray(16), 0, 16))
+        reader.close()
+    }
+
+    @Test
+    fun openTruncatedExtensible_failsCleanly() {
+        // fmt 声明 16 字节但 tag=0xFFFE（EXTENSIBLE 却缺 GUID）：应干净失败而非抛 AIOOBE
+        val data = ByteArray(8)
+        val header = ByteArray(44).also { h ->
+            "RIFF".toByteArray().copyInto(h, 0)
+            h.putLeInt(4, 36 + data.size)
+            "WAVE".toByteArray().copyInto(h, 8)
+            "fmt ".toByteArray().copyInto(h, 12)
+            h.putLeInt(16, 16)                // fmt chunk size
+            h.putLeShort(20, 0xFFFE)          // EXTENSIBLE（但 fmt 只有 16 字节）
+            h.putLeShort(22, 2)
+            h.putLeInt(24, 48000)
+            h.putLeInt(28, 48000 * 2 * 2)
+            h.putLeShort(32, 4)
+            h.putLeShort(34, 16)
+            "data".toByteArray().copyInto(h, 36)
+            h.putLeInt(40, data.size)
+        }
+        val file = File(tempFolder.root, "truncated_extensible.wav")
+        file.writeBytes(header + data)
+
+        val reader = WavFile(file.absolutePath)
+        assertTrue(!reader.open())  // 干净返回 false，不抛 ArrayIndexOutOfBoundsException
+    }
 }

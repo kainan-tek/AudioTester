@@ -112,6 +112,9 @@ abstract class AudioTestFragment : Fragment() {
             this, AudioViewModel.Factory(app, { ctx -> createEngine(ctx) }, section, messages)
         )[AudioViewModel::class.java]
 
+        // 视图重建（旋转）时清掉未被消费的错误，避免 LiveData 重放旧错误再弹框
+        viewModel.clearError()
+
         viewModel.state.observe(viewLifecycleOwner) { updateButtonStates(it) }
         viewModel.statusMessage.observe(viewLifecycleOwner) { statusText.text = it }
         // 消费即清：防止配置变更时 LiveData 重放最后的错误值再次弹框

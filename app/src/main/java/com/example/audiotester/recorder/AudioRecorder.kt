@@ -6,7 +6,7 @@ import android.media.AudioRecord
 import android.util.Log
 import com.example.audiotester.common.AudioConfig
 import com.example.audiotester.common.AudioConstants
-import com.example.audiotester.common.AudioEngine
+import com.example.audiotester.common.AudioEngineBase
 import com.example.audiotester.common.AudioState
 import com.example.audiotester.common.WavFile
 import kotlinx.coroutines.CoroutineScope
@@ -16,46 +16,31 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.IOException
 
 /**
- * 音频录制器，基于 AudioRecord API，实现 [AudioEngine]。
+ * 音频录制器，基于 AudioRecord API。
  */
-class AudioRecorder(private val context: Context) : AudioEngine {
+class AudioRecorder(private val context: Context) : AudioEngineBase() {
 
     companion object {
         private const val TAG = "AudioRecorder"
     }
 
+    override val tag: String get() = TAG
+
     private var audioRecord: AudioRecord? = null
     private var wavFile: WavFile? = null
 
-    @Volatile
-    private var state = AudioState.IDLE
     private var recordingJob: Job? = null
     private val recordingScope = CoroutineScope(Dispatchers.IO)
-    private var currentConfig: AudioConfig = AudioConfig()
-
-    private var listener: AudioEngine.Listener? = null
-
-    override fun setListener(listener: AudioEngine.Listener?) {
-        this.listener = listener
-    }
-
-    override fun setAudioConfig(config: AudioConfig) {
-        if (state == AudioState.ACTIVE) {
-            Log.w(TAG, "Cannot change configuration while recording")
-            return
-        }
-        currentConfig = config
-        Log.i(TAG, "Configuration updated: ${config.description}")
-    }
 
     override fun start(): Boolean {
         Log.d(TAG, "Starting recording")
 
         if (state == AudioState.ACTIVE) {
             Log.w(TAG, "Already recording")
-            listener?.onError("Already recording")
+            engineListener?.onError("Already recording")
             return false
         }
         if (state == AudioState.ERROR) {
@@ -68,7 +53,7 @@ class AudioRecorder(private val context: Context) : AudioEngine {
 
             state = AudioState.ACTIVE
             startRecordingLoop()
-            listener?.onStarted()
+            engineListener?.onStarted()
 
             Log.i(TAG, "Recording started successfully")
             true
@@ -81,31 +66,28 @@ class AudioRecorder(private val context: Context) : AudioEngine {
         }
     }
 
-    override fun stop() {
-        Log.d(TAG, "Stopping recording")
-
-        if (state != AudioState.ACTIVE) return
-
-        state = AudioState.IDLE
+    override fun cancelJob() {
         recordingJob?.cancel()
-        releaseResources()
-        listener?.onStopped()
-
-        Log.i(TAG, "Recording stopped")
     }
 
-    override fun release() {
-        stop()
-        listener = null
+    override fun cancelScope() {
+        recordingScope.cancel()
+    }
+
+    override fun releaseAudioResources() {
         try {
-            recordingScope.cancel()
-        } catch (e: Exception) {
-            Log.w(TAG, "Error canceling recording scope", e)
-        }
-        Log.d(TAG, "AudioRecorder resources released")
-    }
+            audioRecord?.apply {
+                if (this.state == AudioRecord.STATE_INITIALIZED) stop()
+                release()
+            }
+            audioRecord = null
 
-    override fun isActive(): Boolean = state == AudioState.ACTIVE
+            wavFile?.close()
+            wavFile = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing resources", e)
+        }
+    }
 
     /**
      * 输出路径：空或 asset:// → 自动生成 App 私有目录路径（普通安装可用）；否则用配置路径。
@@ -226,10 +208,11 @@ class AudioRecorder(private val context: Context) : AudioEngine {
                 Log.i(TAG, "Started recording - ${currentConfig.description}")
 
                 while (isActive && state == AudioState.ACTIVE) {
+                    // 录音无自然 EOF：ACTIVE 下 read 返回 ≤0 只能是 track 异常，
+                    // 按错误中止而非伪装成正常完成（catch 的 state 守卫保证停止竞态不误报）
                     val bytesRead = audioRecord.read(buffer, 0, buffer.size)
                     if (bytesRead <= 0) {
-                        Log.w(TAG, "AudioRecord read failed or reached end: $bytesRead")
-                        break
+                        throw IOException("AudioRecord read failed: $bytesRead")
                     }
 
                     if (!saveFailed && wavFile?.writeAudioData(buffer, 0, bytesRead) != true) {
@@ -264,28 +247,6 @@ class AudioRecorder(private val context: Context) : AudioEngine {
                 }
             }
         }
-    }
-
-    private fun releaseResources() {
-        try {
-            audioRecord?.apply {
-                if (this.state == AudioRecord.STATE_INITIALIZED) stop()
-                release()
-            }
-            audioRecord = null
-
-            wavFile?.close()
-            wavFile = null
-        } catch (e: Exception) {
-            Log.e(TAG, "Error releasing resources", e)
-        }
-    }
-
-    private fun handleError(message: String) {
-        state = AudioState.ERROR
-        Log.e(TAG, "Error: $message")
-        listener?.onError(message)
-        releaseResources()
     }
 
     private fun generateOutputFilePath(): String {
