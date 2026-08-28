@@ -4,7 +4,6 @@ import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.util.Log
-import com.example.audiotester.common.AudioConfig
 import com.example.audiotester.common.AudioConstants
 import com.example.audiotester.common.AudioEngineBase
 import com.example.audiotester.common.AudioState

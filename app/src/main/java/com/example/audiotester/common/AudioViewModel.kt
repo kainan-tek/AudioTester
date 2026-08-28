@@ -140,7 +140,6 @@ class AudioViewModel(
     }
 
     override fun onCleared() {
-        super.onCleared()
         engine.release()
     }
 

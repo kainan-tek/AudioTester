@@ -1,10 +1,10 @@
 package com.example.audiotester.common
 
+import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.view.LayoutInflater
@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import com.example.audiotester.R
+import androidx.core.net.toUri
 
 /**
  * 抽象基类：承载全部共享 UI 接线（观察者、Spinner、按钮状态、错误对话框、权限、onPause 停止）。
@@ -44,6 +45,7 @@ abstract class AudioTestFragment : Fragment() {
      * Activity Result API 申请运行时权限（替代已弃用的 requestPermissions / onRequestPermissionsResult）。
      * 车机（AAOS）上 Toast 不可见，故用状态栏文本 + 对话框反馈。
      */
+    @SuppressLint("SetTextI18n")
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
             val ctx = context ?: return@registerForActivityResult
@@ -219,6 +221,7 @@ abstract class AudioTestFragment : Fragment() {
         }
     }
 
+    @SuppressLint("SetTextI18n")
     private fun handleError(error: String) {
         val userMessage = friendlyErrorMessage(error)
         AlertDialog.Builder(requireContext())
@@ -237,6 +240,7 @@ abstract class AudioTestFragment : Fragment() {
         viewModel.reloadConfigurations()
     }
 
+    @SuppressLint("SetTextI18n")
     private fun updateInfo() {
         viewModel.currentConfig.value?.let { infoText.text = formatInfo(it) }
             ?: run { infoText.text = "Information" }
@@ -258,7 +262,7 @@ abstract class AudioTestFragment : Fragment() {
     /** 打开本应用的系统设置页 */
     private fun openAppSettings() {
         val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-            .setData(Uri.parse("package:${requireContext().packageName}"))
+            .setData("package:${requireContext().packageName}".toUri())
         startActivity(intent)
     }
 

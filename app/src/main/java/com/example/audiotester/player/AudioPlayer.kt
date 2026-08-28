@@ -8,7 +8,6 @@ import android.media.AudioManager
 import android.media.AudioTrack
 import android.os.SystemClock
 import android.util.Log
-import com.example.audiotester.common.AudioConfig
 import com.example.audiotester.common.AudioConstants
 import com.example.audiotester.common.AudioEngineBase
 import com.example.audiotester.common.AudioState
