@@ -110,6 +110,49 @@
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
       <description>Voice Assistant (Power Saving Mode)</description>
     </config>
+
+    <!-- 系统 usage（1000-1004）：经 @SystemApi setSystemUsage 反射设置，需 MODIFY_AUDIO_ROUTING
+         + 系统部署；普通安装下失败属预期。USAGE_SPEAKER_CLEANUP 另需 feature flag。 -->
+    <config>
+      <usage>USAGE_EMERGENCY</usage>
+      <contentType>CONTENT_TYPE_SONIFICATION</contentType>
+      <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
+      <bufferMultiplier>2</bufferMultiplier>
+      <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <description>Emergency Alert (System Usage) [需系统权限]</description>
+    </config>
+    <config>
+      <usage>USAGE_SAFETY</usage>
+      <contentType>CONTENT_TYPE_SONIFICATION</contentType>
+      <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
+      <bufferMultiplier>2</bufferMultiplier>
+      <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <description>Safety Warning (System Usage) [需系统权限]</description>
+    </config>
+    <config>
+      <usage>USAGE_VEHICLE_STATUS</usage>
+      <contentType>CONTENT_TYPE_SONIFICATION</contentType>
+      <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
+      <bufferMultiplier>2</bufferMultiplier>
+      <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <description>Vehicle Status (System Usage) [需系统权限]</description>
+    </config>
+    <config>
+      <usage>USAGE_ANNOUNCEMENT</usage>
+      <contentType>CONTENT_TYPE_SPEECH</contentType>
+      <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
+      <bufferMultiplier>2</bufferMultiplier>
+      <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <description>Announcement (System Usage) [需系统权限]</description>
+    </config>
+    <config>
+      <usage>USAGE_SPEAKER_CLEANUP</usage>
+      <contentType>CONTENT_TYPE_UNKNOWN</contentType>
+      <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
+      <bufferMultiplier>2</bufferMultiplier>
+      <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <description>Speaker Cleanup (System Usage) [需系统权限+feature flag]</description>
+    </config>
   </player>
 
   <!--

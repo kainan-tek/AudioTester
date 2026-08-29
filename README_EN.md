@@ -10,7 +10,7 @@ Top tabs switch between **Playback** / **Recording**; the two features are mutua
 
 ### Playback
 
-- **13 audio scenarios** (media/voice call/call signaling/alarm/notification/notification event/ringtone/game/navigation/accessibility/system sound/voice assistant/96kHz hi-res), each configurable via usage/contentType/performanceMode
+- **18 audio scenarios** (media/voice call/call signaling/alarm/notification/notification event/ringtone/game/navigation/accessibility/system sound/voice assistant/96kHz hi-res + 5 system usages: emergency/safety/vehicle status/announcement/speaker cleanup), each configurable via usage/contentType/performanceMode; system usages require system deployment (see "Advanced: System Deployment")
 - Built-in 20s pink noise source (`asset://sample/48k_2ch_16bit.wav`), no WAV file needed by default; can also use a `/data/xx.wav` real file
 - Full audio support: **1-16 channels** (incl. 5.1/7.1/5.1.4/7.1.4), **8kHz-192kHz**, **8/16/24/32-bit PCM**
 - Audio focus management: auto-stops when focus is taken
@@ -24,7 +24,7 @@ Top tabs switch between **Playback** / **Recording**; the two features are mutua
 ## Requirements
 
 - Device: Android 12L (API 32)+; an AAOS head unit or AAOS emulator is recommended
-- Build: JDK 21 + Android SDK (compileSdk 36); when building on another machine, adjust `org.gradle.java.home` in `gradle.properties` or set `JAVA_HOME`
+- Build: JDK 21 + Android SDK (compileSdk 37); when building on another machine, set `JAVA_HOME` (or add `org.gradle.java.home` in `gradle.properties`) to point to your local JDK
 - Playback capability limits (multi-channel / high sample rates) depend on the device audio framework
 
 ## Quick Start
@@ -98,6 +98,7 @@ External hot-reload: place the file at `/data/audio_configs.xml` (takes priority
 | Built-in source playback, recording to private dir, assets config | ✅ | ✅ |
 | `/data` config hot-reload, `/data` WAV playback, fixed recording paths | ❌ | ✅ (still gated by SELinux/DAC) |
 | System sources (ECHO_REFERENCE/RADIO_TUNER/HOTWORD/ULTRASOUND) | ❌ `Invalid audio source` | depends on device framework |
+| System usage playback (USAGE_EMERGENCY etc., 5 types) | ❌ init fails | ✅ (needs MODIFY_AUDIO_ROUTING whitelist; SPEAKER_CLEANUP also needs feature flag) |
 
 ### /data File Access
 
@@ -123,7 +124,7 @@ adb uninstall com.example.audiotester          # 1. uninstall the normal install
 adb root && adb remount                        # 3. remount system partition for write access
 adb push AudioTester.apk /system/priv-app/AudioTester/AudioTester.apk  # 4. filename must match the dir name
 # 5. (recommended) add privapp-permissions-com.example.audiotester.xml under /system/etc/permissions/
-#    include signature permissions: CAPTURE_AUDIO_OUTPUT / CAPTURE_AUDIO_HOTWORD
+#    include signature permissions: CAPTURE_AUDIO_OUTPUT / CAPTURE_AUDIO_HOTWORD / MODIFY_AUDIO_ROUTING
 #    (enables system recording sources ECHO_REFERENCE/RADIO_TUNER/HOTWORD/ULTRASOUND)
 adb reboot                                      # 6. reboot to apply
 ```

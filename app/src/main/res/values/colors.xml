@@ -1,8 +1,4 @@
 <resources>
-    <!-- 基础 -->
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
-
     <!-- 语义色板 -->
     <color name="start_button">#2E7D5B</color>
     <color name="stop_button">#C62828</color>

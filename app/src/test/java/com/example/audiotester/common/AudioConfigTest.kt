@@ -119,7 +119,7 @@ class AudioConfigTest {
         val file = File("src/main/assets/audio_configs.xml")
         val player = file.inputStream().use { AudioConfig.parseConfigs(it, "player") }
         val recorder = file.inputStream().use { AudioConfig.parseConfigs(it, "recorder") }
-        assertEquals(13, player.size)
+        assertEquals(18, player.size)
         assertEquals(15, recorder.size)
         assertEquals("USAGE_MEDIA", player[0].usage)
     }

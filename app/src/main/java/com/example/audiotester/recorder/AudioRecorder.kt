@@ -53,6 +53,12 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
 
             state = AudioState.ACTIVE
             startRecordingLoop()
+            if (state != AudioState.ACTIVE) {
+                // 启动窗口内被 stop() 抢先（onCleared/release 等并发路径）：资源已释放，
+                // 再触发 onStarted 会把 UI 卡死在 ACTIVE；与 AudioPlayer 同款防御。
+                // 另覆盖录音循环在 onStarted 前就报错的竞态（handleError → state=ERROR）
+                return true
+            }
             engineListener?.onStarted()
 
             Log.i(TAG, "Recording started successfully")

@@ -30,12 +30,14 @@ object AudioConstants {
 
     /** AudioTrack usage 常量映射 */
     object Usage {
-        // ---- AAOS 专属 usage（1000-1004）已停用 ----
-        // 原因：AudioTrack 的公开 AudioAttributes.Builder.setUsage() 对 @hide 值（1000-1004）
-        // 一律抛 IllegalArgumentException——即使 priv-app 系统部署 + MODIFY_AUDIO_ROUTING 也无效，
-        // 拒绝发生在 Java 公开 API 的值校验层，与权限无关。须经隐藏 API 反射修改 AudioAttributes
-        // 私有字段 mUsage 才能使用，脆弱且不适合测试工具。AAOS usage 测试请改用 AAudioTester
-        // （native AAudioStreamBuilder_setUsage 天然支持）。其中 SPEAKER_CLEANUP(1004) 亦非平台真实值。
+        // ---- 系统 usage（1000-1004）----
+        // setUsage() 只接受 SDK usage（switch 白名单），传 1000-1004 一律抛 IllegalArgumentException；
+        // 官方系统入口是 @SystemApi Builder.setSystemUsage()（需 MODIFY_AUDIO_ROUTING + 系统部署，
+        // 见 buildAudioAttributes() 的反射实现——@SystemApi 不在公开 SDK，普通安装下反射会被 hidden API
+        // 拦截或缺权限，符合"系统专属配置普通安装失败"的既有约定）。
+        // USAGE_SPEAKER_CLEANUP(1004) 被 feature flag android.media.audio.speaker_cleanup_usage
+        // 门控，部分设备不可用。数值对照 AOSP android-16.0.0_r4（SYSTEM_USAGE_OFFSET = 1000）。
+        // AAOS usage 的另一测试途径：AAudioTester（native AAudioStreamBuilder_setUsage 天然支持）。
 
         val MAP = mapOf(
             "USAGE_UNKNOWN" to AudioAttributes.USAGE_UNKNOWN,
@@ -51,6 +53,15 @@ object AudioConstants {
             "USAGE_ASSISTANCE_SONIFICATION" to AudioAttributes.USAGE_ASSISTANCE_SONIFICATION,
             "USAGE_GAME" to AudioAttributes.USAGE_GAME,
             "USAGE_ASSISTANT" to AudioAttributes.USAGE_ASSISTANT
+        )
+
+        /** 系统 usage（1000-1004）：@SystemApi 常量不在公开 SDK，硬编码数值 */
+        val SYSTEM_MAP = mapOf(
+            "USAGE_EMERGENCY" to 1000,
+            "USAGE_SAFETY" to 1001,
+            "USAGE_VEHICLE_STATUS" to 1002,
+            "USAGE_ANNOUNCEMENT" to 1003,
+            "USAGE_SPEAKER_CLEANUP" to 1004,
         )
     }
 
@@ -74,8 +85,56 @@ object AudioConstants {
         )
     }
 
+    /** 只查 SDK usage（契约：返回值恒可传给 setUsage()，不会 >=1000） */
     fun getUsage(usage: String): Int =
         parseEnumValue(Usage.MAP, usage, AudioAttributes.USAGE_MEDIA, "Usage")
+
+    /** 含系统 usage 的原始值解析（>=1000 即系统 usage，需 resolveUsage 而非 getUsage 判断） */
+    fun resolveUsage(usage: String): Int =
+        parseEnumValue(ALL_USAGE_MAP, usage, AudioAttributes.USAGE_MEDIA, "Usage")
+
+    /** 系统 usage 起始值（对应 @hide AudioAttributes.SYSTEM_USAGE_OFFSET） */
+    private const val SYSTEM_USAGE_START = 1000
+
+    private val ALL_USAGE_MAP: Map<String, Int> = Usage.MAP + Usage.SYSTEM_MAP
+
+    /**
+     * 构造播放域 AudioAttributes（统一入口，消除调用方重复构建）。
+     * usage < 1000 走 setUsage()；系统 usage（>=1000）经 @SystemApi setSystemUsage() 反射设置，
+     * 两者不可混用（build() 会抛 IllegalArgumentException）。系统 usage 需
+     * MODIFY_AUDIO_ROUTING + 系统部署，普通安装失败属预期。
+     */
+    fun buildAudioAttributes(usage: String, contentType: String): AudioAttributes {
+        val builder = AudioAttributes.Builder()
+            .setContentType(getContentType(contentType))
+        builder.applyUsage(resolveUsage(usage))
+        return builder.build()
+    }
+
+    private fun AudioAttributes.Builder.applyUsage(usage: Int) {
+        if (usage < SYSTEM_USAGE_START) setUsage(usage) else SystemUsageSetter(this, usage)
+    }
+
+    /** 反射调用 @SystemApi AudioAttributes.Builder.setSystemUsage(int)（不在公开 SDK） */
+    private object SystemUsageSetter {
+        private val method by lazy {
+            AudioAttributes.Builder::class.java
+                .getMethod("setSystemUsage", Int::class.javaPrimitiveType)
+        }
+
+        operator fun invoke(builder: AudioAttributes.Builder, usage: Int) {
+            try {
+                method.invoke(builder, usage)
+            } catch (e: Throwable) {
+                // 统一转成可处理错误：hidden API 拦截抛 NoSuchMethodError（Error 非 Exception，
+                // 引擎的 catch(Exception) 接不住），普通安装/缺权限时抛 IAE/InvocationTargetException。
+                throw IllegalArgumentException(
+                    "setSystemUsage failed for usage $usage (requires MODIFY_AUDIO_ROUTING + system deployment)",
+                    e
+                )
+            }
+        }
+    }
 
     fun getContentType(contentType: String): Int = parseEnumValue(
         ContentType.MAP, contentType, AudioAttributes.CONTENT_TYPE_MUSIC, "ContentType"

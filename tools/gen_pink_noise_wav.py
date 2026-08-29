@@ -38,6 +38,8 @@ PRESETS = {
 
 def generate(out, sample_rate, bits, duration, channels=2, peak=0.25, fade=0.02, seed=DEFAULT_SEED):
     """生成归一化粉噪 WAV：第一遍浮点粉噪取峰值，第二遍归一化+淡入淡出写 PCM int。"""
+    if bits not in (16, 24, 32):
+        raise ValueError(f"Unsupported bit depth: {bits} (supported: 16/24/32)")
     rng = random.Random(seed)
     n = int(sample_rate * duration)
 
@@ -60,12 +62,13 @@ def generate(out, sample_rate, bits, duration, channels=2, peak=0.25, fade=0.02,
             peak_val = a
         frames.append(v)
 
-    # 第二遍：归一化到 peak，加淡入淡出，写整数 PCM（16bit h / 其余按 i，多声道同值）
+    # 第二遍：归一化到 peak，加淡入淡出，写整数 PCM（16/24/32bit 小端，多声道同值）
+    # 24bit 为 packed 3 字节小端，struct 无对应码，需逐样本 to_bytes；16/32bit 用 struct 加速
     gain = peak / peak_val
     max_int = (1 << (bits - 1)) - 1
     fade_samples = int(fade * sample_rate)
     frame_bytes = channels * (bits // 8)
-    fmt = struct.Struct("<" + ("h" if bits == 16 else "i") * channels)
+    fmt = None if bits == 24 else struct.Struct("<" + ("h" if bits == 16 else "i") * channels)
     buf = bytearray(n * frame_bytes)
     for i in range(n):
         env = 1.0
@@ -74,7 +77,13 @@ def generate(out, sample_rate, bits, duration, channels=2, peak=0.25, fade=0.02,
         elif i > n - fade_samples:
             env = (n - i) / fade_samples
         sample = int(frames[i] * gain * env * max_int)
-        fmt.pack_into(buf, i * frame_bytes, *([sample] * channels))
+        off = i * frame_bytes
+        if fmt is not None:
+            fmt.pack_into(buf, off, *([sample] * channels))
+        else:
+            raw = sample.to_bytes(3, "little", signed=True)
+            for c in range(channels):
+                buf[off + c * 3: off + c * 3 + 3] = raw
 
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     with wave.open(out, "wb") as w:

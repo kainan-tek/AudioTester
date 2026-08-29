@@ -1,7 +1,6 @@
 package com.example.audiotester.player
 
 import android.content.Context
-import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -161,9 +160,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
             val bufferSize = minBufferSize * currentConfig.bufferMultiplier
 
             val audioAttributes =
-                AudioAttributes.Builder().setUsage(AudioConstants.getUsage(currentConfig.usage))
-                    .setContentType(AudioConstants.getContentType(currentConfig.contentType))
-                    .build()
+                AudioConstants.buildAudioAttributes(currentConfig.usage, currentConfig.contentType)
 
             audioTrack = AudioTrack.Builder().setAudioAttributes(audioAttributes).setAudioFormat(
                 AudioFormat.Builder().setSampleRate(wavFile.sampleRate).setChannelMask(channelMask)
@@ -215,9 +212,9 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
     private fun requestAudioFocus(): Boolean {
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
-        // AAOS 系统 usage（>=1000）AudioAttributes 无法表示（@hide，setUsage 会抛 IllegalArgumentException），
-        // 且系统 usage 属车辆关键音频、不依赖普通焦点管理，故跳过焦点请求。
-        if (AudioConstants.getUsage(currentConfig.usage) >= 1000) return true
+        // 系统 usage（>=1000）属车辆关键音频、不依赖普通焦点管理，跳过焦点请求。
+        // （SDK usage 恒 <1000，本判断只对 Usage.SYSTEM_MAP 的配置生效）
+        if (AudioConstants.resolveUsage(currentConfig.usage) >= 1000) return true
 
         val focusType = determineFocusType()
 
@@ -226,8 +223,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
         }
 
         val audioAttributes =
-            AudioAttributes.Builder().setUsage(AudioConstants.getUsage(currentConfig.usage))
-                .setContentType(AudioConstants.getContentType(currentConfig.contentType)).build()
+            AudioConstants.buildAudioAttributes(currentConfig.usage, currentConfig.contentType)
 
         val request = AudioFocusRequest.Builder(focusType).setAudioAttributes(audioAttributes)
             .setOnAudioFocusChangeListener(focusChangeListener).setWillPauseWhenDucked(false)

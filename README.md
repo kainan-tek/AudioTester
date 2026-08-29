@@ -10,7 +10,7 @@
 
 ### 播放
 
-- **13 种音频场景**（媒体/语音通话/通话信令/闹钟/通知/通知事件/铃声/游戏/导航/辅助/系统提示音/语音助手/96kHz 高解析），每种可配 usage/contentType/performanceMode
+- **18 种音频场景**（媒体/语音通话/通话信令/闹钟/通知/通知事件/铃声/游戏/导航/辅助/系统提示音/语音助手/96kHz 高解析 + 5 种系统 usage：紧急/安全/车辆状态/广播/扬声器清理），每种可配 usage/contentType/performanceMode；系统 usage 需系统部署，见「高级：系统级部署」
 - 内置 20s 粉红噪声音源（`asset://sample/48k_2ch_16bit.wav`），默认无需推 WAV；也可配置 `/data/xx.wav` 真实文件
 - 完整音频支持：**1-16 声道**（含 5.1/7.1/5.1.4/7.1.4）、**8kHz-192kHz**、**8/16/24/32 位 PCM**
 - 音频焦点管理：焦点被抢占时自动停止
@@ -24,7 +24,7 @@
 ## 环境要求
 
 - 设备：Android 12L（API 32）及以上；推荐 AAOS 车机或 AAOS 模拟器
-- 构建：JDK 21 + Android SDK（compileSdk 36）；换机构建需调整 `gradle.properties` 的 `org.gradle.java.home` 或设 `JAVA_HOME`
+- 构建：JDK 21 + Android SDK（compileSdk 37）；换机构建需设 `JAVA_HOME`（或在 `gradle.properties` 添加 `org.gradle.java.home`）指向本机 JDK
 - 多声道/高采样率等播放能力上限取决于设备音频框架支持
 
 ## 快速开始
@@ -57,7 +57,7 @@ adb logcat -s AudioPlayer AudioRecorder
 
 | 字段 | 适用 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `usage` | 播放 | `USAGE_MEDIA` | 音频用途，12 种场景见内置配置 |
+| `usage` | 播放 | `USAGE_MEDIA` | 音频用途，13 种 SDK 场景 + 5 种系统场景见内置配置；系统场景需系统部署 |
 | `contentType` | 播放 | `CONTENT_TYPE_MUSIC` | 内容类型 |
 | `performanceMode` | 播放 | `PERFORMANCE_MODE_POWER_SAVING` | 省电 / 低延迟 |
 | `bufferMultiplier` | 两者 | `2` | 最小缓冲倍数；须为正整数，非法条目被跳过 |
@@ -98,6 +98,7 @@ adb logcat -s AudioPlayer AudioRecorder
 | 内置音源播放、录音到私有目录、assets 配置 | ✅ | ✅ |
 | `/data` 配置热更新、`/data` WAV 播放、固定录音路径 | ❌ | ✅（仍受 SELinux/DAC 管控） |
 | 系统音源（ECHO_REFERENCE/RADIO_TUNER/HOTWORD/ULTRASOUND） | ❌ `Invalid audio source` | 取决于车机框架支持 |
+| 系统 usage 播放（USAGE_EMERGENCY 等 5 种） | ❌ 初始化失败 | ✅（需 MODIFY_AUDIO_ROUTING 白名单；SPEAKER_CLEANUP 另需 feature flag） |
 
 ### /data 文件访问
 
@@ -123,8 +124,9 @@ adb uninstall com.example.audiotester          # 1. 先卸载普通安装
 adb root && adb remount                        # 3. 获取系统分区写权限
 adb push AudioTester.apk /system/priv-app/AudioTester/AudioTester.apk  # 4. 文件名=目录名
 # 5.（建议）在 /system/etc/permissions/ 加 privapp-permissions-com.example.audiotester.xml 白名单
-#    需包含签名权限：CAPTURE_AUDIO_OUTPUT / CAPTURE_AUDIO_HOTWORD
-#    （授予后系统录音音源 ECHO_REFERENCE/RADIO_TUNER/HOTWORD/ULTRASOUND 才有机会工作）
+#    需包含签名权限：CAPTURE_AUDIO_OUTPUT / CAPTURE_AUDIO_HOTWORD / MODIFY_AUDIO_ROUTING
+#    （授予后系统录音音源 ECHO_REFERENCE/RADIO_TUNER/HOTWORD/ULTRASOUND 与
+#     播放系统 usage USAGE_EMERGENCY 等才有机会工作）
 adb reboot                                      # 6. 重启生效
 ```
 

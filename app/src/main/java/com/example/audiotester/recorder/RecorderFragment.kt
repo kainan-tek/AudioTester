@@ -18,21 +18,13 @@ class RecorderFragment : AudioTestFragment() {
         stopped = "Recording Stopped",
         failed = "Recording Failed",
     )
-    override val startButtonText: CharSequence get() = "Start"
-    override val stopButtonText: CharSequence get() = "Stop"
     override val configTitle: CharSequence get() = "Recording Configuration"
     override val errorDialogTitle: CharSequence get() = "Recording Error"
 
     override fun createEngine(context: Context): AudioEngine = AudioRecorder(context)
 
-    @Suppress("ObsoleteSdkInt")
+    // minSdk=32（Android 12L），无需处理 P 及以下的 WRITE_EXTERNAL_STORAGE
     override fun requiredPermissions(): Array<String> = when {
-        Build.VERSION.SDK_INT <= Build.VERSION_CODES.P ->
-            arrayOf(
-                Manifest.permission.RECORD_AUDIO,
-                Manifest.permission.READ_EXTERNAL_STORAGE,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE
-            )
         Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2 ->
             arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.READ_EXTERNAL_STORAGE)
         else -> arrayOf(Manifest.permission.RECORD_AUDIO)

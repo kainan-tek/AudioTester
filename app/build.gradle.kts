@@ -5,7 +5,6 @@ plugins {
 android {
     namespace = "com.example.audiotester"
     compileSdk = 37
-    ndkVersion = "29.0.14206865"
     buildToolsVersion = "36.0.0"
 
     defaultConfig {
