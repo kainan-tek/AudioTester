@@ -60,7 +60,7 @@ class AudioViewModel(
         }
     }
 
-    fun reloadConfigurations() {
+    fun reloadConfigurations(previousPosition: Int) {
         if (_state.value == AudioState.ACTIVE) {
             updateUI({
                 _statusMessage.value = "Cannot reload configuration while active"
@@ -74,8 +74,9 @@ class AudioViewModel(
             updateUI({
                 if (configs.isNotEmpty()) {
                     _availableConfigs.value = configs
-                    val currentDescription = _currentConfig.value?.description
-                    val newConfig = configs.find { it.description == currentDescription } ?: configs[0]
+                    // 按选中位置恢复而非 description：description 可能重复（自定义 /data 配置），
+                    // 位置与 UI 选中态天然一致
+                    val newConfig = configs.getOrNull(previousPosition) ?: configs[0]
                     engine.setAudioConfig(newConfig)
                     _currentConfig.value = newConfig
                     _statusMessage.value = "Configuration reloaded successfully: ${configs.size} configs"

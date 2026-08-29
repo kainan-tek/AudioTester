@@ -237,7 +237,8 @@ abstract class AudioTestFragment : Fragment() {
     }
 
     private fun reloadConfigurations() {
-        viewModel.reloadConfigurations()
+        // 按选中位置恢复而非 description：description 可能重复（自定义配置），位置与 UI 选中态天然一致
+        viewModel.reloadConfigurations(configSpinner.selectedItemPosition)
     }
 
     @SuppressLint("SetTextI18n")
