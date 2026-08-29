@@ -16,6 +16,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.IOException
+import java.util.Locale
 
 /**
  * 音频录制器，基于 AudioRecord API。
@@ -219,10 +220,9 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
                         Log.e(TAG, "File save failed - recording continues without saving")
                     }
                     totalBytes += bytesRead
-
                     if (totalBytes - lastLoggedBytes >= 5 * 1024 * 1024L) {
                         val mbRecorded = totalBytes / (1024.0 * 1024.0)
-                        Log.v(TAG, "Progress: %.1fMB".format(mbRecorded))
+                        Log.v(TAG, "Progress: %.1fMB".format(Locale.US, mbRecorded))
                         lastLoggedBytes = totalBytes
                     }
                 }
@@ -230,9 +230,9 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
                 if (state == AudioState.ACTIVE) {
                     val mbTotal = totalBytes / (1024.0 * 1024.0)
                     if (saveFailed) {
-                        Log.w(TAG, "Recording finished: %.1fMB captured, file saving aborted".format(mbTotal))
+                        Log.w(TAG, "Recording finished: %.1fMB captured, file saving aborted".format(Locale.US, mbTotal))
                     } else {
-                        Log.i(TAG, "Recording completed: %.1fMB".format(mbTotal))
+                        Log.i(TAG, "Recording completed: %.1fMB".format(Locale.US, mbTotal))
                     }
                     stop()
                 }

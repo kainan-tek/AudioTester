@@ -132,7 +132,7 @@ adb reboot                                      # 6. reboot to apply
 
 ## Development
 
-Replace the built-in source: edit `tools/gen_sample_wav.py` and re-run `python tools/gen_sample_wav.py`.
+Replace the built-in source: edit `tools/gen_pink_noise_wav.py` and re-run `python tools/gen_pink_noise_wav.py` (defaults to the 48k bundled sample; `python tools/gen_pink_noise_wav.py 96k32bit` generates the hi-res test file).
 
 ## Manual Verification Checklist
 

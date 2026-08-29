@@ -132,7 +132,7 @@ adb reboot                                      # 6. 重启生效
 
 ## 开发
 
-内置音源替换：修改 `tools/gen_sample_wav.py` 后重新运行 `python tools/gen_sample_wav.py`。
+内置音源替换：修改 `tools/gen_pink_noise_wav.py` 后重新运行 `python tools/gen_pink_noise_wav.py`（默认生成 48k 内置音源；`python tools/gen_pink_noise_wav.py 96k32bit` 生成 hi-res 测试文件）。
 
 ## 手动验证清单
 

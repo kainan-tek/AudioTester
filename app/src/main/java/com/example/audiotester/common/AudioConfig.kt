@@ -29,6 +29,8 @@ data class AudioConfig(
 
     companion object {
         private const val TAG = "AudioConfig"
+        /** 单一默认值来源：data class 默认值、parseConfigs 回退、getDefaultConfigs 均以此为基准 */
+        private val DEFAULT = AudioConfig()
 
         fun loadConfigs(context: Context, section: String): List<AudioConfig> {
             return try {
@@ -61,15 +63,15 @@ data class AudioConfig(
                 runCatching {
                     val c = entries.item(i) as Element
                     AudioConfig(
-                        usage = c.childText("usage", "USAGE_MEDIA"),
-                        contentType = c.childText("contentType", "CONTENT_TYPE_MUSIC"),
-                        performanceMode = c.childText("performanceMode", "PERFORMANCE_MODE_POWER_SAVING"),
-                        audioSource = c.childText("audioSource", "MIC"),
-                        sampleRate = c.childInt("sampleRate", 48000),
-                        channelCount = c.childInt("channelCount", 2),
-                        audioFormat = c.childInt("audioFormat", 16),
-                        bufferMultiplier = c.childInt("bufferMultiplier", 2),
-                        audioFilePath = c.childText("audioFilePath", ""),
+                        usage = c.childText("usage", DEFAULT.usage),
+                        contentType = c.childText("contentType", DEFAULT.contentType),
+                        performanceMode = c.childText("performanceMode", DEFAULT.performanceMode),
+                        audioSource = c.childText("audioSource", DEFAULT.audioSource),
+                        sampleRate = c.childInt("sampleRate", DEFAULT.sampleRate),
+                        channelCount = c.childInt("channelCount", DEFAULT.channelCount),
+                        audioFormat = c.childInt("audioFormat", DEFAULT.audioFormat),
+                        bufferMultiplier = c.childInt("bufferMultiplier", DEFAULT.bufferMultiplier),
+                        audioFilePath = c.childText("audioFilePath", DEFAULT.audioFilePath),
                         description = c.childText("description", "Custom configuration")
                     )
                 }.onFailure {

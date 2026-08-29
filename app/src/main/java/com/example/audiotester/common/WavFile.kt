@@ -92,11 +92,8 @@ class WavFile(private val filePath: String) {
                     stream.close()
                     return false
                 }
-                // chunk size：header[4..7]（4 字节小端，无符号）
-                val size = (header[4].toLong() and 0xFFL) or
-                    ((header[5].toLong() and 0xFFL) shl 8) or
-                    ((header[6].toLong() and 0xFFL) shl 16) or
-                    ((header[7].toLong() and 0xFFL) shl 24)
+                // chunk size：header[4..7]（4 字节小端，无符号，mask 还原 unsigned）
+                val size = readLittleEndianInt(header, 4).toLong() and 0xFFFFFFFFL
                 when (String(header, 0, 4)) {
                     "fmt " -> {
                         // 40 字节覆盖 EXTENSIBLE 的 cbSize/validBits/channelMask/subformat(GUID 前 2 字节)
@@ -111,8 +108,7 @@ class WavFile(private val filePath: String) {
                         audioFormat = readLittleEndianShort(fmt, 0)
                         channelCount = readLittleEndianShort(fmt, 2)
                         // fmt[4..7] = sampleRate（4 字节小端）
-                        sampleRate = (fmt[4].toInt() and 0xFF) or ((fmt[5].toInt() and 0xFF) shl 8) or
-                            ((fmt[6].toInt() and 0xFF) shl 16) or ((fmt[7].toInt() and 0xFF) shl 24)
+                        sampleRate = readLittleEndianInt(fmt, 4)
                         bitsPerSample = readLittleEndianShort(fmt, 14)
                         // WAVE_FORMAT_EXTENSIBLE：真实格式在 subformat GUID 前 2 字节（需至少 26 字节）
                         if (audioFormat == WAVE_FORMAT_EXTENSIBLE) {
@@ -325,6 +321,12 @@ class WavFile(private val filePath: String) {
 
     private fun readLittleEndianShort(bytes: ByteArray, offset: Int): Int =
         (bytes[offset].toInt() and 0xFF) or ((bytes[offset + 1].toInt() and 0xFF) shl 8)
+
+    private fun readLittleEndianInt(bytes: ByteArray, offset: Int): Int =
+        (bytes[offset].toInt() and 0xFF) or
+            ((bytes[offset + 1].toInt() and 0xFF) shl 8) or
+            ((bytes[offset + 2].toInt() and 0xFF) shl 16) or
+            ((bytes[offset + 3].toInt() and 0xFF) shl 24)
 
     private fun ByteArray.writeLittleEndianInt(value: Int, offset: Int) {
         this[offset] = (value and 0xFF).toByte()

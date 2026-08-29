@@ -19,8 +19,6 @@ class PlayerFragment : AudioTestFragment() {
         stopped = "Playback Stopped",
         failed = "Playback failed",
     )
-    override val startButtonText: CharSequence get() = "Start"
-    override val stopButtonText: CharSequence get() = "Stop"
     override val configTitle: CharSequence get() = "Playback Configuration"
     override val errorDialogTitle: CharSequence get() = "Playback Error"
 

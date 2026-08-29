@@ -127,57 +127,62 @@ object AudioConstants {
         return default
     }
 
-    fun getFormatFromBitDepth(bitsPerSample: Int): Int = when (bitsPerSample) {
-        8 -> AudioFormat.ENCODING_PCM_8BIT
-        16 -> AudioFormat.ENCODING_PCM_16BIT
-        24 -> AudioFormat.ENCODING_PCM_24BIT_PACKED
-        32 -> AudioFormat.ENCODING_PCM_32BIT
-        else -> {
+    /** 位深 → AudioFormat 编码；合法位深集合同源（isValidBitDepth 派生自它） */
+    private val BIT_DEPTH_FORMATS = mapOf(
+        8 to AudioFormat.ENCODING_PCM_8BIT,
+        16 to AudioFormat.ENCODING_PCM_16BIT,
+        24 to AudioFormat.ENCODING_PCM_24BIT_PACKED,
+        32 to AudioFormat.ENCODING_PCM_32BIT,
+    )
+
+    /** 输出声道掩码（播放域）；合法输出声道数集合同源（isValidOutputChannelCount 派生自它） */
+    private val OUTPUT_CHANNEL_MASKS = mapOf(
+        1 to AudioFormat.CHANNEL_OUT_MONO,
+        2 to AudioFormat.CHANNEL_OUT_STEREO,
+        4 to AudioFormat.CHANNEL_OUT_QUAD,
+        6 to AudioFormat.CHANNEL_OUT_5POINT1,
+        8 to AudioFormat.CHANNEL_OUT_7POINT1_SURROUND,
+        10 to AudioFormat.CHANNEL_OUT_5POINT1POINT4,
+        12 to AudioFormat.CHANNEL_OUT_7POINT1POINT4,
+        16 to AudioFormat.CHANNEL_OUT_9POINT1POINT6,
+    )
+
+    /** 输入声道掩码（录音域），8/10/12/14/16 为特殊掩码 */
+    private val INPUT_CHANNEL_MASKS = mapOf(
+        1 to AudioFormat.CHANNEL_IN_MONO,
+        2 to AudioFormat.CHANNEL_IN_STEREO,
+        8 to 0x3FC, // 8 声道：6 mic + 2 reference（主动降噪用）
+        10 to 0xFFC, // 10 声道：5.1.4 环绕录音
+        12 to 0x3FFC, // 12 声道：7.1.4 环绕录音
+        14 to 0xFFFC, // 14 声道：扩展环绕
+        16 to 0x3FFFC, // 16 声道：完整配置
+    )
+
+    fun getFormatFromBitDepth(bitsPerSample: Int): Int =
+        BIT_DEPTH_FORMATS[bitsPerSample] ?: run {
             android.util.Log.w("AudioConstants", "Unsupported bit depth: $bitsPerSample, using 16-bit")
             AudioFormat.ENCODING_PCM_16BIT
         }
-    }
 
-    /** 输出声道掩码（播放域），支持 1-16 声道 */
-    fun getOutputChannelMask(channelCount: Int): Int = when (channelCount) {
-        1 -> AudioFormat.CHANNEL_OUT_MONO
-        2 -> AudioFormat.CHANNEL_OUT_STEREO
-        4 -> AudioFormat.CHANNEL_OUT_QUAD
-        6 -> AudioFormat.CHANNEL_OUT_5POINT1
-        8 -> AudioFormat.CHANNEL_OUT_7POINT1_SURROUND
-        10 -> AudioFormat.CHANNEL_OUT_5POINT1POINT4
-        12 -> AudioFormat.CHANNEL_OUT_7POINT1POINT4
-        16 -> AudioFormat.CHANNEL_OUT_9POINT1POINT6
-        else -> {
+    fun getOutputChannelMask(channelCount: Int): Int =
+        OUTPUT_CHANNEL_MASKS[channelCount] ?: run {
             android.util.Log.w("AudioConstants", "Unsupported channel count: $channelCount, using stereo playback")
             AudioFormat.CHANNEL_OUT_STEREO
         }
-    }
 
-    /** 输入声道掩码（录音域），8/10/12/14/16 为特殊掩码 */
-    fun getInputChannelMask(channelCount: Int): Int = when (channelCount) {
-        1 -> AudioFormat.CHANNEL_IN_MONO
-        2 -> AudioFormat.CHANNEL_IN_STEREO
-        8 -> 0x3FC // 8 声道：6 mic + 2 reference（主动降噪用）
-        10 -> 0xFFC // 10 声道：5.1.4 环绕录音
-        12 -> 0x3FFC // 12 声道：7.1.4 环绕录音
-        14 -> 0xFFFC // 14 声道：扩展环绕
-        16 -> 0x3FFFC // 16 声道：完整配置
-        else -> {
+    fun getInputChannelMask(channelCount: Int): Int =
+        INPUT_CHANNEL_MASKS[channelCount] ?: run {
             android.util.Log.w("AudioConstants", "Unsupported input channel count: $channelCount, using CHANNEL_IN_STEREO")
             AudioFormat.CHANNEL_IN_STEREO
         }
-    }
 
     fun isValidSampleRate(rate: Int): Boolean = rate in 8000..192000
 
-    // 与 getInputChannelMask / getOutputChannelMask 的映射保持一致，避免无掩码的声道数
-    // （如输入 4/6、输出 3/5/7）静默降级成 stereo，却仍按原声道数写 WAV 头导致错位。
-    fun isValidInputChannelCount(count: Int): Boolean =
-        count == 1 || count == 2 || count == 8 || count == 10 || count == 12 || count == 14 || count == 16
+    // 合法声道数与掩码表同源：无掩码的声道数（如输入 4/6、输出 3/5/7）不会静默降级成
+    // stereo 却仍按原声道数写 WAV 头导致错位。
+    fun isValidInputChannelCount(count: Int): Boolean = count in INPUT_CHANNEL_MASKS
 
-    fun isValidOutputChannelCount(count: Int): Boolean =
-        count == 1 || count == 2 || count == 4 || count == 6 || count == 8 || count == 10 || count == 12 || count == 16
+    fun isValidOutputChannelCount(count: Int): Boolean = count in OUTPUT_CHANNEL_MASKS
 
-    fun isValidBitDepth(depth: Int): Boolean = depth in listOf(8, 16, 24, 32)
+    fun isValidBitDepth(depth: Int): Boolean = depth in BIT_DEPTH_FORMATS
 }

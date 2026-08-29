@@ -20,6 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.IOException
+import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
@@ -59,6 +60,11 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
 
             state = AudioState.ACTIVE
             startPlaybackLoop()
+            if (state != AudioState.ACTIVE) {
+                // 启动窗口内被 stop() 抢先（如焦点丢失回调）：资源已由 stop 释放、
+                // UI 已由 onStopped 同步，再触发 onStarted 会把 UI 卡死在 ACTIVE
+                return true
+            }
             engineListener?.onStarted()
 
             Log.i(TAG, "Playback started successfully")
@@ -203,9 +209,6 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
             handleError("${AudioConstants.ErrorTypes.PARAM} Unsupported channel count: ${wavFile.channelCount} (supported: 1/2/4/6/8/10/12/16)")
             return false
         }
-        if (wavFile.channelCount == 12) {
-            Log.i(TAG, "Detected 7.1.4 audio configuration (12 channels)")
-        }
         return true
     }
 
@@ -274,7 +277,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
             val wavFile = wavFile ?: return@launch
             val audioTrack = audioTrack ?: return@launch
 
-            val bytesPerFrame = wavFile.channelCount * (wavFile.bitsPerSample / 8)
+            val bytesPerFrame = wavFile.blockAlign
             val audioTrackBufferSize = audioTrack.bufferSizeInFrames * bytesPerFrame
             val rawWriteBufferSize =
                 when (AudioConstants.getPerformanceMode(currentConfig.performanceMode)) {
@@ -309,10 +312,9 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                         throw IOException("AudioTrack write incomplete: $bytesWritten/$bytesRead")
                     }
                     totalBytes += bytesWritten
-
                     if (totalBytes - lastLoggedBytes >= 5 * 1024 * 1024L) {
                         val mbPlayed = totalBytes / (1024.0 * 1024.0)
-                        Log.v(TAG, "Progress: %.1fMB".format(mbPlayed))
+                        Log.v(TAG, "Progress: %.1fMB".format(Locale.US, mbPlayed))
                         lastLoggedBytes = totalBytes
                     }
                 }
@@ -333,7 +335,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                         }
                     }
                     val mbTotal = totalBytes / (1024.0 * 1024.0)
-                    Log.i(TAG, "Playback completed: %.1fMB".format(mbTotal))
+                    Log.i(TAG, "Playback completed: %.1fMB".format(Locale.US, mbTotal))
                     stop()
                 }
             } catch (e: Exception) {
