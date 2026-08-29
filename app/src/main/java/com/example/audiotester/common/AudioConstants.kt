@@ -6,17 +6,17 @@ import android.media.AudioTrack
 import android.media.MediaRecorder
 
 /**
- * 音频常量（播放域 + 录音域合一）
+ * Audio constants (player domain + recorder domain combined)
  */
 object AudioConstants {
 
-    // 合并配置文件（播放与录音共用单个文件，双 section："player" / "recorder"）
+    // Merged config file (player and recorder share a single file with two sections: "player" / "recorder")
     const val CONFIG_FILE_PATH = "/data/audio_configs.xml"
     const val ASSETS_CONFIG_FILE = "audio_configs.xml"
     const val DEFAULT_AUDIO_FILE = "asset://sample/48k_2ch_16bit.wav"
 
     /**
-     * 错误前缀
+     * Error prefixes
      */
     object ErrorTypes {
         const val FILE = "[FILE]"
@@ -26,18 +26,21 @@ object AudioConstants {
         const val FOCUS = "[FOCUS]"
     }
 
-    // ===== 播放域 =====
+    // ===== Player domain =====
 
-    /** AudioTrack usage 常量映射 */
+    /** AudioTrack usage constant map */
     object Usage {
-        // ---- 系统 usage（1000-1004）----
-        // setUsage() 只接受 SDK usage（switch 白名单），传 1000-1004 一律抛 IllegalArgumentException；
-        // 官方系统入口是 @SystemApi Builder.setSystemUsage()（需 MODIFY_AUDIO_ROUTING + 系统部署，
-        // 见 buildAudioAttributes() 的反射实现——@SystemApi 不在公开 SDK，普通安装下反射会被 hidden API
-        // 拦截或缺权限，符合"系统专属配置普通安装失败"的既有约定）。
-        // USAGE_SPEAKER_CLEANUP(1004) 被 feature flag android.media.audio.speaker_cleanup_usage
-        // 门控，部分设备不可用。数值对照 AOSP android-16.0.0_r4（SYSTEM_USAGE_OFFSET = 1000）。
-        // AAOS usage 的另一测试途径：AAudioTester（native AAudioStreamBuilder_setUsage 天然支持）。
+        // ---- System usages (1000-1004) ----
+        // setUsage() only accepts SDK usages (switch-based whitelist); passing 1000-1004 always
+        // throws IllegalArgumentException. The official entry point is @SystemApi
+        // Builder.setSystemUsage() (requires MODIFY_AUDIO_ROUTING + system deployment; see the
+        // reflection-based implementation in buildAudioAttributes() — @SystemApi is not in the
+        // public SDK, so on normal installs reflection is blocked by hidden API restrictions or
+        // lacks permission, consistent with the existing convention that "system-only configs
+        // fail on normal installs").
+        // USAGE_SPEAKER_CLEANUP(1004) is gated by feature flag android.media.audio.speaker_cleanup_usage
+        // and is unavailable on some devices. Values per AOSP android-16.0.0_r4 (SYSTEM_USAGE_OFFSET = 1000).
+        // Another way to test AAOS usages: AAudioTester (native AAudioStreamBuilder_setUsage supports them natively).
 
         val MAP = mapOf(
             "USAGE_UNKNOWN" to AudioAttributes.USAGE_UNKNOWN,
@@ -55,7 +58,7 @@ object AudioConstants {
             "USAGE_ASSISTANT" to AudioAttributes.USAGE_ASSISTANT
         )
 
-        /** 系统 usage（1000-1004）：@SystemApi 常量不在公开 SDK，硬编码数值 */
+        /** System usages (1000-1004): @SystemApi constants not in the public SDK, values hardcoded */
         val SYSTEM_MAP = mapOf(
             "USAGE_EMERGENCY" to 1000,
             "USAGE_SAFETY" to 1001,
@@ -65,7 +68,7 @@ object AudioConstants {
         )
     }
 
-    /** AudioTrack contentType 常量映射 */
+    /** AudioTrack contentType constant map */
     object ContentType {
         val MAP = mapOf(
             "CONTENT_TYPE_UNKNOWN" to AudioAttributes.CONTENT_TYPE_UNKNOWN,
@@ -76,7 +79,7 @@ object AudioConstants {
         )
     }
 
-    /** AudioTrack 性能模式常量映射 */
+    /** AudioTrack performance mode constant map */
     object PerformanceMode {
         val MAP = mapOf(
             "PERFORMANCE_MODE_LOW_LATENCY" to AudioTrack.PERFORMANCE_MODE_LOW_LATENCY,
@@ -85,24 +88,24 @@ object AudioConstants {
         )
     }
 
-    /** 只查 SDK usage（契约：返回值恒可传给 setUsage()，不会 >=1000） */
+    /** SDK usages only (contract: the return value is always safe for setUsage(), never >= 1000) */
     fun getUsage(usage: String): Int =
         parseEnumValue(Usage.MAP, usage, AudioAttributes.USAGE_MEDIA, "Usage")
 
-    /** 含系统 usage 的原始值解析（>=1000 即系统 usage，需 resolveUsage 而非 getUsage 判断） */
+    /** Raw value resolution including system usages (>= 1000 means system usage; use resolveUsage, not getUsage, to detect it) */
     fun resolveUsage(usage: String): Int =
         parseEnumValue(ALL_USAGE_MAP, usage, AudioAttributes.USAGE_MEDIA, "Usage")
 
-    /** 系统 usage 起始值（对应 @hide AudioAttributes.SYSTEM_USAGE_OFFSET） */
+    /** System usage start value (matches @hide AudioAttributes.SYSTEM_USAGE_OFFSET) */
     private const val SYSTEM_USAGE_START = 1000
 
     private val ALL_USAGE_MAP: Map<String, Int> = Usage.MAP + Usage.SYSTEM_MAP
 
     /**
-     * 构造播放域 AudioAttributes（统一入口，消除调用方重复构建）。
-     * usage < 1000 走 setUsage()；系统 usage（>=1000）经 @SystemApi setSystemUsage() 反射设置，
-     * 两者不可混用（build() 会抛 IllegalArgumentException）。系统 usage 需
-     * MODIFY_AUDIO_ROUTING + 系统部署，普通安装失败属预期。
+     * Builds player-domain AudioAttributes (single entry point, removes duplicate construction at call sites).
+     * usage < 1000 goes through setUsage(); system usages (>= 1000) are set via reflection on
+     * @SystemApi setSystemUsage(). The two cannot be mixed (build() throws IllegalArgumentException).
+     * System usages require MODIFY_AUDIO_ROUTING + system deployment; failure on normal installs is expected.
      */
     fun buildAudioAttributes(usage: String, contentType: String): AudioAttributes {
         val builder = AudioAttributes.Builder()
@@ -115,7 +118,7 @@ object AudioConstants {
         if (usage < SYSTEM_USAGE_START) setUsage(usage) else SystemUsageSetter(this, usage)
     }
 
-    /** 反射调用 @SystemApi AudioAttributes.Builder.setSystemUsage(int)（不在公开 SDK） */
+    /** Reflectively invokes @SystemApi AudioAttributes.Builder.setSystemUsage(int) (not in the public SDK) */
     private object SystemUsageSetter {
         private val method by lazy {
             AudioAttributes.Builder::class.java
@@ -126,8 +129,9 @@ object AudioConstants {
             try {
                 method.invoke(builder, usage)
             } catch (e: Throwable) {
-                // 统一转成可处理错误：hidden API 拦截抛 NoSuchMethodError（Error 非 Exception，
-                // 引擎的 catch(Exception) 接不住），普通安装/缺权限时抛 IAE/InvocationTargetException。
+                // Normalize into a handleable error: hidden API interception throws NoSuchMethodError
+                // (an Error, which the engine's catch(Exception) cannot handle); normal installs /
+                // missing permission throw IAE / InvocationTargetException.
                 throw IllegalArgumentException(
                     "setSystemUsage failed for usage $usage (requires MODIFY_AUDIO_ROUTING + system deployment)",
                     e
@@ -144,9 +148,9 @@ object AudioConstants {
         PerformanceMode.MAP, performanceMode, AudioTrack.PERFORMANCE_MODE_POWER_SAVING, "PerformanceMode"
     )
 
-    // ===== 录音域 =====
+    // ===== Recorder domain =====
 
-    /** AudioRecord 音源常量映射（系统级音源 1997-2000 需系统权限） */
+    /** AudioRecord source constant map (system-level sources 1997-2000 require system permissions) */
     object AudioSource {
         val MAP = mapOf(
             "DEFAULT" to MediaRecorder.AudioSource.DEFAULT,
@@ -160,17 +164,17 @@ object AudioConstants {
             "REMOTE_SUBMIX" to MediaRecorder.AudioSource.REMOTE_SUBMIX,
             "UNPROCESSED" to MediaRecorder.AudioSource.UNPROCESSED,
             "VOICE_PERFORMANCE" to MediaRecorder.AudioSource.VOICE_PERFORMANCE,
-            "ECHO_REFERENCE" to 1997, // 回声参考：需 RECORD_AUDIO + 系统权限
-            "RADIO_TUNER" to 1998,    // 收音机调谐：需系统签名
-            "HOTWORD" to 1999,        // 热词检测：需系统签名
-            "ULTRASOUND" to 2000      // 超声波：需 RECORD_AUDIO + 系统权限
+            "ECHO_REFERENCE" to 1997, // Echo reference: requires RECORD_AUDIO + system permission
+            "RADIO_TUNER" to 1998,    // Radio tuner: requires system signature
+            "HOTWORD" to 1999,        // Hotword detection: requires system signature
+            "ULTRASOUND" to 2000      // Ultrasound: requires RECORD_AUDIO + system permission
         )
     }
 
     fun getAudioSource(audioSource: String): Int =
         parseEnumValue(AudioSource.MAP, audioSource, MediaRecorder.AudioSource.MIC, "AudioSource")
 
-    // ===== 共享 helper =====
+    // ===== Shared helpers =====
 
     private fun parseEnumValue(
         map: Map<String, Int>,
@@ -186,7 +190,7 @@ object AudioConstants {
         return default
     }
 
-    /** 位深 → AudioFormat 编码；合法位深集合同源（isValidBitDepth 派生自它） */
+    /** Bit depth → AudioFormat encoding; the valid bit-depth set shares this source (isValidBitDepth derives from it) */
     private val BIT_DEPTH_FORMATS = mapOf(
         8 to AudioFormat.ENCODING_PCM_8BIT,
         16 to AudioFormat.ENCODING_PCM_16BIT,
@@ -194,7 +198,7 @@ object AudioConstants {
         32 to AudioFormat.ENCODING_PCM_32BIT,
     )
 
-    /** 输出声道掩码（播放域）；合法输出声道数集合同源（isValidOutputChannelCount 派生自它） */
+    /** Output channel masks (player domain); the valid output channel-count set shares this source (isValidOutputChannelCount derives from it) */
     private val OUTPUT_CHANNEL_MASKS = mapOf(
         1 to AudioFormat.CHANNEL_OUT_MONO,
         2 to AudioFormat.CHANNEL_OUT_STEREO,
@@ -206,15 +210,15 @@ object AudioConstants {
         16 to AudioFormat.CHANNEL_OUT_9POINT1POINT6,
     )
 
-    /** 输入声道掩码（录音域），8/10/12/14/16 为特殊掩码 */
+    /** Input channel masks (recorder domain); 8/10/12/14/16 are special masks */
     private val INPUT_CHANNEL_MASKS = mapOf(
         1 to AudioFormat.CHANNEL_IN_MONO,
         2 to AudioFormat.CHANNEL_IN_STEREO,
-        8 to 0x3FC, // 8 声道：6 mic + 2 reference（主动降噪用）
-        10 to 0xFFC, // 10 声道：5.1.4 环绕录音
-        12 to 0x3FFC, // 12 声道：7.1.4 环绕录音
-        14 to 0xFFFC, // 14 声道：扩展环绕
-        16 to 0x3FFFC, // 16 声道：完整配置
+        8 to 0x3FC, // 8 channels: 6 mic + 2 reference (for active noise cancellation)
+        10 to 0xFFC, // 10 channels: 5.1.4 surround recording
+        12 to 0x3FFC, // 12 channels: 7.1.4 surround recording
+        14 to 0xFFFC, // 14 channels: extended surround
+        16 to 0x3FFFC, // 16 channels: full configuration
     )
 
     fun getFormatFromBitDepth(bitsPerSample: Int): Int =
@@ -237,8 +241,9 @@ object AudioConstants {
 
     fun isValidSampleRate(rate: Int): Boolean = rate in 8000..192000
 
-    // 合法声道数与掩码表同源：无掩码的声道数（如输入 4/6、输出 3/5/7）不会静默降级成
-    // stereo 却仍按原声道数写 WAV 头导致错位。
+    // Valid channel counts share the mask tables as their source: channel counts without a mask
+    // (e.g. input 4/6, output 3/5/7) must not silently fall back to stereo while the WAV header is
+    // still written with the original channel count, which would misalign the data.
     fun isValidInputChannelCount(count: Int): Boolean = count in INPUT_CHANNEL_MASKS
 
     fun isValidOutputChannelCount(count: Int): Boolean = count in OUTPUT_CHANNEL_MASKS

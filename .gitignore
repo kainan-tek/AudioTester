@@ -12,3 +12,4 @@ local.properties
 # Gradle 生成的 daemon JVM 工具链缓存
 /gradle/gradle-daemon-jvm.properties
 .kotlin/
+.workbuddy/

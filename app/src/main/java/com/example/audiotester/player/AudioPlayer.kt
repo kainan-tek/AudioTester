@@ -23,7 +23,7 @@ import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * 音频播放器，基于 AudioTrack API。
+ * Audio player based on the AudioTrack API.
  */
 class AudioPlayer(private val context: Context) : AudioEngineBase() {
 
@@ -60,8 +60,9 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
             state = AudioState.ACTIVE
             startPlaybackLoop()
             if (state != AudioState.ACTIVE) {
-                // 启动窗口内被 stop() 抢先（如焦点丢失回调）：资源已由 stop 释放、
-                // UI 已由 onStopped 同步，再触发 onStarted 会把 UI 卡死在 ACTIVE
+                // stop() got ahead during the startup window (e.g. focus-loss callback):
+                // resources were already released by stop and the UI was synced by onStopped;
+                // firing onStarted now would leave the UI stuck in ACTIVE
                 return true
             }
             engineListener?.onStarted()
@@ -104,7 +105,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
     }
 
     /**
-     * 打开音频文件。空路径 → 内置音源；asset:// 前缀 → assets；其余 → 普通文件。
+     * Opens the audio file. Empty path → built-in source; asset:// prefix → assets; otherwise → regular file.
      */
     private fun openAudioFile(): Boolean {
         val path = currentConfig.audioFilePath.ifEmpty { AudioConstants.DEFAULT_AUDIO_FILE }
@@ -212,8 +213,9 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
     private fun requestAudioFocus(): Boolean {
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
-        // 系统 usage（>=1000）属车辆关键音频、不依赖普通焦点管理，跳过焦点请求。
-        // （SDK usage 恒 <1000，本判断只对 Usage.SYSTEM_MAP 的配置生效）
+        // System usages (>= 1000) are vehicle-critical audio and do not rely on regular focus
+        // management, so skip the focus request.
+        // (SDK usages are always < 1000; this check only affects Usage.SYSTEM_MAP configs)
         if (AudioConstants.resolveUsage(currentConfig.usage) >= 1000) return true
 
         val focusType = determineFocusType()
@@ -247,7 +249,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
     }
 
     /**
-     * UI 不支持暂停，所有焦点丢失都转为停止
+     * The UI has no pause support, so every focus loss is turned into a stop
      */
     private fun handleFocusChange(focusChange: Int) {
         if (focusChange in listOf(
@@ -281,8 +283,10 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                     AudioTrack.PERFORMANCE_MODE_POWER_SAVING -> audioTrackBufferSize / 2
                     else -> audioTrackBufferSize / 3
                 }
-            // 向下取整到帧倍数：write() 只消费整帧（userSize >= mFrameSize 循环），残帧尾巴
-            // 永远写不进去且返回 0；非帧倍数块会每块丢字节、后续数据整体错位成噪声
+            // Round down to a whole number of frames: write() only consumes whole frames
+            // (userSize >= mFrameSize loop); a leftover partial frame can never be written and
+            // returns 0; non-frame-aligned blocks would drop bytes every block and shift all
+            // subsequent data into noise
             val writeBufferSize = rawWriteBufferSize / bytesPerFrame * bytesPerFrame
 
             val buffer = ByteArray(writeBufferSize)
@@ -301,8 +305,10 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                         break
                     }
 
-                    // 块已帧对齐：阻塞式 write() 内部排空循环要么消费全部整帧、要么出错
-                    // （部分成功后必接错误码）。短写即异常，响亮失败以暴露平台问题
+                    // The block is frame-aligned: the blocking write()'s internal drain loop
+                    // either consumes all whole frames or errors out (partial success is always
+                    // followed by an error code). Treat a short write as an exception — fail
+                    // loudly to expose platform issues
                     val bytesWritten = audioTrack.write(buffer, 0, bytesRead)
                     if (bytesWritten != bytesRead) {
                         throw IOException("AudioTrack write incomplete: $bytesWritten/$bytesRead")
@@ -316,12 +322,14 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                 }
 
                 if (state == AudioState.ACTIVE) {
-                    // 正常播完（EOF）时 stop() 会丢弃 track 缓冲里未播完的帧，导致尾部被截。
-                    // 轮询 playbackHeadPosition 排空后再 stop，确保整段音频都被听到。
+                    // On a natural end (EOF), stop() would discard the frames still buffered in
+                    // the track, cutting off the tail. Poll playbackHeadPosition until drained,
+                    // then stop, so the entire audio is heard.
                     if (readLoopEnded) {
                         val framesWritten = totalBytes / bytesPerFrame
-                        // 排空最长 = track 缓冲时长（大 minBufferSize 设备可达秒级），
-                        // deadline 按缓冲时长缩放 + 2s 余量，防 HAL 异常卡死；10ms 轮询足够
+                        // Drain time is at most the track buffer duration (on devices with a large
+                        // minBufferSize this can be seconds); scale the deadline by the buffer
+                        // duration + 2s margin to guard against a stuck HAL; 10ms polling is enough
                         val drainMs = audioTrack.bufferSizeInFrames * 1000L / wavFile.sampleRate
                         val deadline = SystemClock.elapsedRealtime() + drainMs + 2000
                         while (isActive && state == AudioState.ACTIVE &&

@@ -7,10 +7,11 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
-    <!-- 系统级签名权限：普通安装不会被授予（无副作用）；仅 priv-app 系统部署 + 权限白名单时生效。
-         CAPTURE_AUDIO_OUTPUT → 录音 ECHO_REFERENCE / RADIO_TUNER / ULTRASOUND 音源
-         CAPTURE_AUDIO_HOTWORD → 录音 HOTWORD 音源
-         MODIFY_AUDIO_ROUTING → 播放系统 usage（1000-1004，AudioConstants.Usage.SYSTEM_MAP）-->
+    <!-- Signature-level system permissions: not granted on normal installs (no side effects);
+         they only take effect with priv-app system deployment + permission whitelist.
+         CAPTURE_AUDIO_OUTPUT → record ECHO_REFERENCE / RADIO_TUNER / ULTRASOUND sources
+         CAPTURE_AUDIO_HOTWORD → record HOTWORD source
+         MODIFY_AUDIO_ROUTING → play system usages (1000-1004, AudioConstants.Usage.SYSTEM_MAP)-->
     <uses-permission android:name="android.permission.CAPTURE_AUDIO_OUTPUT"
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.CAPTURE_AUDIO_HOTWORD"

@@ -4,14 +4,14 @@
 One parameterized script replacing the former gen_sample_wav.py /
 gen_96k_2ch_32bit_wav.py:
 
-  python tools/gen_pink_noise_wav.py            # 48k/2ch/16bit 内置音源 (20s)
-  python tools/gen_pink_noise_wav.py 96k32bit   # 96k/2ch/32bit 测试文件 (2min)
+  python tools/gen_pink_noise_wav.py            # 48k/2ch/16bit built-in source (20s)
+  python tools/gen_pink_noise_wav.py 96k32bit   # 96k/2ch/32bit test file (2min)
 
-  # 自定义格式/时长
+  # Custom format/duration
   python tools/gen_pink_noise_wav.py --out out.wav --rate 48000 --bits 24 --duration 30
 
-SEED 固定 → 重新生成内容一致（-3dB/oct，宽带柔和，无刺耳高频）。
-96k hi-res 文件需推送到 /data/ 供 Hi-Res 配置使用（需 root/系统权限）。
+Fixed SEED → regenerating produces identical content (-3dB/oct, broadband and gentle, no harsh highs).
+The 96k hi-res file must be pushed to /data/ for the Hi-Res config (requires root/system permission).
 """
 import argparse
 import array
@@ -23,7 +23,8 @@ import wave
 DEFAULT_SEED = 20260827
 REPO_ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-# 预设保持旧脚本的一键行为：48k16bit 为打包内置音源，96k32bit 为 hi-res 测试文件
+# Presets keep the old scripts' one-shot behavior: 48k16bit is the bundled built-in source,
+# 96k32bit is the hi-res test file
 PRESETS = {
     "48k16bit": dict(
         out=os.path.join(REPO_ROOT, "app", "src", "main", "assets", "sample", "48k_2ch_16bit.wav"),
@@ -37,13 +38,14 @@ PRESETS = {
 
 
 def generate(out, sample_rate, bits, duration, channels=2, peak=0.25, fade=0.02, seed=DEFAULT_SEED):
-    """生成归一化粉噪 WAV：第一遍浮点粉噪取峰值，第二遍归一化+淡入淡出写 PCM int。"""
+    """Generate a normalized pink-noise WAV: first pass computes floating-point pink noise and its
+    peak; second pass normalizes, applies fade-in/out and writes integer PCM."""
     if bits not in (16, 24, 32):
         raise ValueError(f"Unsupported bit depth: {bits} (supported: 16/24/32)")
     rng = random.Random(seed)
     n = int(sample_rate * duration)
 
-    # 第一遍：生成浮点粉噪并记录峰值（array('f') 紧凑存储）
+    # First pass: generate floating-point pink noise and record the peak (array('f') for compact storage)
     frames = array.array('f')
     b0 = b1 = b2 = b3 = b4 = b5 = b6 = 0.0
     peak_val = 0.0
@@ -62,8 +64,10 @@ def generate(out, sample_rate, bits, duration, channels=2, peak=0.25, fade=0.02,
             peak_val = a
         frames.append(v)
 
-    # 第二遍：归一化到 peak，加淡入淡出，写整数 PCM（16/24/32bit 小端，多声道同值）
-    # 24bit 为 packed 3 字节小端，struct 无对应码，需逐样本 to_bytes；16/32bit 用 struct 加速
+    # Second pass: normalize to peak, add fade-in/out, write integer PCM (16/24/32-bit
+    # little-endian, same value on all channels)
+    # 24-bit is packed 3-byte little-endian; struct has no matching code, so per-sample to_bytes
+    # is needed; 16/32-bit use struct for speed
     gain = peak / peak_val
     max_int = (1 << (bits - 1)) - 1
     fade_samples = int(fade * sample_rate)
@@ -97,8 +101,8 @@ def generate(out, sample_rate, bits, duration, channels=2, peak=0.25, fade=0.02,
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("preset", nargs="?", default="48k16bit", choices=sorted(PRESETS),
-                        help="预设（默认 48k16bit = 打包内置音源）；显式参数可覆盖预设值")
-    parser.add_argument("--out", help="输出路径（默认取预设路径）")
+                        help="preset (default 48k16bit = bundled built-in source); explicit parameters override preset values")
+    parser.add_argument("--out", help="output path (defaults to the preset path)")
     parser.add_argument("--rate", type=int, default=None)
     parser.add_argument("--bits", type=int, default=None)
     parser.add_argument("--duration", type=float, default=None)

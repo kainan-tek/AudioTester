@@ -23,7 +23,7 @@ class RecorderFragment : AudioTestFragment() {
 
     override fun createEngine(context: Context): AudioEngine = AudioRecorder(context)
 
-    // minSdk=32（Android 12L），无需处理 P 及以下的 WRITE_EXTERNAL_STORAGE
+    // minSdk=32 (Android 12L): no need to handle WRITE_EXTERNAL_STORAGE for P and below
     override fun requiredPermissions(): Array<String> = when {
         Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2 ->
             arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.READ_EXTERNAL_STORAGE)

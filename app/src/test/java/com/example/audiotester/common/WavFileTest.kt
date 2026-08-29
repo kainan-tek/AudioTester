@@ -108,7 +108,7 @@ class WavFileTest {
         assertTrue(file.exists())
     }
 
-    // 手拼 WAV 头的小端写入 helper（测试专用）
+    // Little-endian write helpers for hand-built WAV headers (test only)
     private fun ByteArray.putLeShort(offset: Int, value: Int) {
         this[offset] = (value and 0xFF).toByte()
         this[offset + 1] = ((value shr 8) and 0xFF).toByte()
@@ -123,7 +123,7 @@ class WavFileTest {
 
     @Test
     fun openExtensibleWav_parsesParameters() {
-        // WAVE_FORMAT_EXTENSIBLE：40 字节 fmt + subformat GUID（前 2 字节 = PCM）
+        // WAVE_FORMAT_EXTENSIBLE: 40-byte fmt + subformat GUID (first 2 bytes = PCM)
         val data = ByteArray(8) { (it + 1).toByte() }
         val header = ByteArray(68).also { h ->
             "RIFF".toByteArray().copyInto(h, 0)
@@ -140,7 +140,7 @@ class WavFileTest {
             h.putLeShort(36, 22)              // cbSize
             h.putLeShort(38, 32)              // valid bits
             h.putLeInt(40, 0x3)               // channel mask (stereo)
-            // KSDATAFORMAT_SUBTYPE_PCM：前 2 字节 0x0001 = PCM
+            // KSDATAFORMAT_SUBTYPE_PCM: first 2 bytes 0x0001 = PCM
             byteArrayOf(0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
                 0x80.toByte(), 0x00, 0x00, 0xAA.toByte(), 0x00, 0x38, 0x9B.toByte(), 0x71).copyInto(h, 44)
             "data".toByteArray().copyInto(h, 60)
@@ -163,7 +163,7 @@ class WavFileTest {
 
     @Test
     fun openPcmWithExtraChunk_skipsFact() {
-        // 经典 PCM + fact chunk：data 不在偏移 36，靠 chunk 扫描跳过 fact
+        // Classic PCM + fact chunk: data is not at offset 36; chunk scanning skips over fact
         val data = ByteArray(16) { it.toByte() }
         val header = ByteArray(56).also { h ->
             "RIFF".toByteArray().copyInto(h, 0)
@@ -198,7 +198,7 @@ class WavFileTest {
 
     @Test
     fun openTruncatedExtensible_failsCleanly() {
-        // fmt 声明 16 字节但 tag=0xFFFE（EXTENSIBLE 却缺 GUID）：应干净失败而非抛 AIOOBE
+        // fmt declares 16 bytes but tag=0xFFFE (EXTENSIBLE without the GUID): must fail cleanly rather than throw AIOOBE
         val data = ByteArray(8)
         val header = ByteArray(44).also { h ->
             "RIFF".toByteArray().copyInto(h, 0)
@@ -206,7 +206,7 @@ class WavFileTest {
             "WAVE".toByteArray().copyInto(h, 8)
             "fmt ".toByteArray().copyInto(h, 12)
             h.putLeInt(16, 16)                // fmt chunk size
-            h.putLeShort(20, 0xFFFE)          // EXTENSIBLE（但 fmt 只有 16 字节）
+            h.putLeShort(20, 0xFFFE)          // EXTENSIBLE (but fmt is only 16 bytes)
             h.putLeShort(22, 2)
             h.putLeInt(24, 48000)
             h.putLeInt(28, 48000 * 2 * 2)
@@ -219,6 +219,6 @@ class WavFileTest {
         file.writeBytes(header + data)
 
         val reader = WavFile(file.absolutePath)
-        assertTrue(!reader.open())  // 干净返回 false，不抛 ArrayIndexOutOfBoundsException
+        assertTrue(!reader.open())  // Returns false cleanly; no ArrayIndexOutOfBoundsException thrown
     }
 }

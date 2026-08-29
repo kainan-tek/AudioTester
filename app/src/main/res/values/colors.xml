@@ -1,5 +1,5 @@
 <resources>
-    <!-- 语义色板 -->
+    <!-- Semantic color palette -->
     <color name="start_button">#2E7D5B</color>
     <color name="stop_button">#C62828</color>
     <color name="status_background">#E3F2FD</color>

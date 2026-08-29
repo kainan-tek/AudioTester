@@ -11,8 +11,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
- * 统一音频 ViewModel：由一个 [AudioEngine] 驱动，处理配置加载/重载、启停、状态与文案。
- * 各特性仅通过 engine / section / messages 区分；ViewModelProvider 作用域按 Fragment 隔离。
+ * Unified audio ViewModel: driven by a single [AudioEngine], handles config loading/reloading,
+ * start/stop, state and messages.
+ * Each feature differs only via engine / section / messages; ViewModelProvider scope is isolated per Fragment.
  */
 class AudioViewModel(
     application: Application,
@@ -69,13 +70,13 @@ class AudioViewModel(
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
-            // loadConfigs 内部已捕获全部异常（失败回退 emergency 默认配置），此处无需再包 try
+            // loadConfigs already catches all exceptions internally (failures fall back to emergency defaults); no extra try needed here
             val configs = AudioConfig.loadConfigs(getApplication(), section)
             updateUI({
                 if (configs.isNotEmpty()) {
                     _availableConfigs.value = configs
-                    // 按选中位置恢复而非 description：description 可能重复（自定义 /data 配置），
-                    // 位置与 UI 选中态天然一致
+                    // Restore by selected position rather than description: descriptions may be
+                    // duplicated (custom /data configs); position naturally matches the UI selection
                     val newConfig = configs.getOrNull(previousPosition) ?: configs[0]
                     engine.setAudioConfig(newConfig)
                     _currentConfig.value = newConfig
@@ -88,7 +89,7 @@ class AudioViewModel(
         }
     }
 
-    /** 必须在主线程调用（直接写 LiveData） */
+    /** Must be called on the main thread (writes LiveData directly) */
     fun start() {
         if (_state.value == AudioState.ACTIVE) return
         stopRequested = false
@@ -99,7 +100,7 @@ class AudioViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             val success = engine.start()
             if (success && stopRequested) {
-                // 启动期间被 stop() 取消（如切 Tab 互斥），立即停止
+                // Canceled by stop() during startup (e.g. tab-switch mutual exclusion); stop immediately
                 engine.stop()
                 return@launch
             }
@@ -114,7 +115,7 @@ class AudioViewModel(
         }
     }
 
-    /** 必须在主线程调用（直接写 LiveData） */
+    /** Must be called on the main thread (writes LiveData directly) */
     fun stop() {
         stopRequested = true
         if (_state.value != AudioState.ACTIVE) return
@@ -136,7 +137,8 @@ class AudioViewModel(
         _errorMessage.value = null
         if (_state.value == AudioState.ERROR) {
             _state.value = AudioState.IDLE
-            // 不重写 _statusMessage：错误文案需保留在状态栏，恢复时机交给错误对话框的 OK/Cancel
+            // Do not rewrite _statusMessage: the error text must stay in the status bar; recovery
+            // timing is left to the error dialog's OK/Cancel
         }
     }
 
@@ -183,7 +185,8 @@ class AudioViewModel(
         private val section: String,
         private val messages: AudioMessages,
     ) : ViewModelProvider.Factory {
-        // engine 与 ViewModel 同步创建：ViewModel 存活复用时（如旋转）不新建 engine
+        // engine is created together with the ViewModel: when the ViewModel survives and is reused
+        // (e.g. rotation), no new engine is created
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
             AudioViewModel(application, engineFactory(application), section, messages) as T

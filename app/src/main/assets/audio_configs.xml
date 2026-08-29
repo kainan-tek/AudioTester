@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  ===== 播放配置（Playback Configs）=====
-  audioFilePath 为空或 asset:// 开头 → 内置音源，无需推 WAV 文件；
-    普通路径如 /data/xx.wav 需系统权限/root 才能读取。
+  ===== Playback Configs =====
+  An audioFilePath that is empty or starts with asset:// → built-in audio source, no WAV file
+  needs to be pushed; regular paths like /data/xx.wav require system permission/root to read.
 -->
 <audioConfigs>
   <player>
@@ -111,15 +111,16 @@
       <description>Voice Assistant (Power Saving Mode)</description>
     </config>
 
-    <!-- 系统 usage（1000-1004）：经 @SystemApi setSystemUsage 反射设置，需 MODIFY_AUDIO_ROUTING
-         + 系统部署；普通安装下失败属预期。USAGE_SPEAKER_CLEANUP 另需 feature flag。 -->
+    <!-- System usages (1000-1004): set via reflection on @SystemApi setSystemUsage; requires
+         MODIFY_AUDIO_ROUTING + system deployment; failure on normal installs is expected.
+         USAGE_SPEAKER_CLEANUP additionally requires a feature flag. -->
     <config>
       <usage>USAGE_EMERGENCY</usage>
       <contentType>CONTENT_TYPE_SONIFICATION</contentType>
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
       <bufferMultiplier>2</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
-      <description>Emergency Alert (System Usage) [需系统权限]</description>
+      <description>Emergency Alert (System Usage) [requires system permission]</description>
     </config>
     <config>
       <usage>USAGE_SAFETY</usage>
@@ -127,7 +128,7 @@
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
       <bufferMultiplier>2</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
-      <description>Safety Warning (System Usage) [需系统权限]</description>
+      <description>Safety Warning (System Usage) [requires system permission]</description>
     </config>
     <config>
       <usage>USAGE_VEHICLE_STATUS</usage>
@@ -135,7 +136,7 @@
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
       <bufferMultiplier>2</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
-      <description>Vehicle Status (System Usage) [需系统权限]</description>
+      <description>Vehicle Status (System Usage) [requires system permission]</description>
     </config>
     <config>
       <usage>USAGE_ANNOUNCEMENT</usage>
@@ -143,7 +144,7 @@
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
       <bufferMultiplier>2</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
-      <description>Announcement (System Usage) [需系统权限]</description>
+      <description>Announcement (System Usage) [requires system permission]</description>
     </config>
     <config>
       <usage>USAGE_SPEAKER_CLEANUP</usage>
@@ -151,15 +152,16 @@
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
       <bufferMultiplier>2</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
-      <description>Speaker Cleanup (System Usage) [需系统权限+feature flag]</description>
+      <description>Speaker Cleanup (System Usage) [requires system permission + feature flag]</description>
     </config>
   </player>
 
   <!--
-    ===== 录音配置（Recorder Configs）=====
-    audioFilePath 为空 → 自动生成到 App 私有目录（普通安装可用）；
-      填 /data/recorded_xx.wav 等路径则用指定路径（需系统权限/可写位置）。
-    已知限制：录音 channelCount 仅支持 {1,2,8,10,12,14,16}（输入掩码可表示）；4/6 等会静默录成立体声。
+    ===== Recorder Configs =====
+    Empty audioFilePath → auto-generated into the app's private directory (works on normal installs);
+      filling in a path like /data/recorded_xx.wav uses that path (requires system permission / a writable location).
+    Known limitation: recording channelCount only supports {1,2,8,10,12,14,16} (representable by
+      input masks); 4/6 etc. will silently record as stereo.
   -->
   <recorder>
     <config>
@@ -256,7 +258,7 @@
       <channelCount>2</channelCount>
       <audioFormat>16</audioFormat>
       <bufferMultiplier>2</bufferMultiplier>
-      <description>Echo Reference (48kHz Stereo) [需系统权限]</description>
+      <description>Echo Reference (48kHz Stereo) [requires system permission]</description>
     </config>
     <config>
       <audioSource>RADIO_TUNER</audioSource>
@@ -264,7 +266,7 @@
       <channelCount>2</channelCount>
       <audioFormat>16</audioFormat>
       <bufferMultiplier>2</bufferMultiplier>
-      <description>Radio Tuner (48kHz Stereo) [需系统权限]</description>
+      <description>Radio Tuner (48kHz Stereo) [requires system permission]</description>
     </config>
     <config>
       <audioSource>HOTWORD</audioSource>
@@ -272,7 +274,7 @@
       <channelCount>1</channelCount>
       <audioFormat>16</audioFormat>
       <bufferMultiplier>2</bufferMultiplier>
-      <description>Hotword Detection (16kHz Mono) [需系统权限]</description>
+      <description>Hotword Detection (16kHz Mono) [requires system permission]</description>
     </config>
     <config>
       <audioSource>ULTRASOUND</audioSource>
@@ -280,7 +282,7 @@
       <channelCount>1</channelCount>
       <audioFormat>16</audioFormat>
       <bufferMultiplier>2</bufferMultiplier>
-      <description>Ultrasound Recording (48kHz Mono) [需系统权限]</description>
+      <description>Ultrasound Recording (48kHz Mono) [requires system permission]</description>
     </config>
   </recorder>
 </audioConfigs>

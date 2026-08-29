@@ -9,10 +9,12 @@ import java.io.InputStream
 import java.io.RandomAccessFile
 
 /**
- * WAV 文件读写统一工具。
- * 读侧：open(文件/InputStream) + readData；写侧：create + writeAudioData + close 回填头部。
- * 读/写实现实质不同，按职责分区；共享字段：sampleRate/channelCount/bitsPerSample，
- * byteRate/blockAlign 为计算属性，dataLength 统一读侧解析与写侧累计的时长计算。
+ * Unified WAV file read/write utility.
+ * Read side: open(file/InputStream) + readData; write side: create + writeAudioData + close (patches the header back).
+ * Read/write implementations are fundamentally different, so they are separated by responsibility;
+ * shared fields: sampleRate/channelCount/bitsPerSample, while byteRate/blockAlign are computed
+ * properties and dataLength unifies duration calculation between header-parsed (read) and
+ * accumulated (write) values.
  */
 class WavFile(private val filePath: String) {
 
@@ -39,7 +41,7 @@ class WavFile(private val filePath: String) {
     var bitsPerSample: Int = 0
         private set
 
-    /** 音频数据字节数：读侧解析自头部，写侧为累计写入量 */
+    /** Audio data size in bytes: parsed from the header on the read side, accumulated writes on the write side */
     var dataLength: Long = 0
         private set
 
@@ -54,7 +56,7 @@ class WavFile(private val filePath: String) {
             dataLength.toFloat() / (sampleRate * channelCount * (bitsPerSample / 8))
         } else 0f
 
-    // ===== 读侧 =====
+    // ===== Read side =====
 
     fun open(): Boolean = try {
         open(FileInputStream(File(filePath)))
@@ -63,12 +65,12 @@ class WavFile(private val filePath: String) {
         false
     }
 
-    /** 从 InputStream 打开（支持 assets，如内置音源） */
+    /** Opens from an InputStream (supports assets, e.g. built-in audio sources) */
     fun open(stream: InputStream): Boolean {
         Log.d(TAG, "Opening WAV stream: $filePath")
         close()
         try {
-            // RIFF/WAVE 头（12 字节），随后按 chunk 迭代
+            // RIFF/WAVE header (12 bytes), then iterate over chunks
             val riff = ByteArray(12)
             if (!readFully(stream, riff, riff.size)) {
                 Log.e(TAG, "Cannot read WAV RIFF header")
@@ -83,7 +85,7 @@ class WavFile(private val filePath: String) {
                 return false
             }
 
-            // 逐 chunk 扫描：fmt 取参数（兼容 EXTENSIBLE），fact/LIST 等跳过，data 即数据起点
+            // Scan chunk by chunk: take parameters from fmt (EXTENSIBLE-compatible), skip fact/LIST etc., data marks the audio start
             var audioFormat = -1
             while (true) {
                 val header = ByteArray(8)
@@ -92,11 +94,11 @@ class WavFile(private val filePath: String) {
                     stream.close()
                     return false
                 }
-                // chunk size：header[4..7]（4 字节小端，无符号，mask 还原 unsigned）
+                // chunk size: header[4..7] (4 bytes little-endian, unsigned; mask restores the unsigned value)
                 val size = readLittleEndianInt(header, 4).toLong() and 0xFFFFFFFFL
                 when (String(header, 0, 4)) {
                     "fmt " -> {
-                        // 40 字节覆盖 EXTENSIBLE 的 cbSize/validBits/channelMask/subformat(GUID 前 2 字节)
+                        // 40 bytes cover EXTENSIBLE's cbSize/validBits/channelMask/subformat (first 2 bytes of the GUID)
                         val fmtLen = minOf(size, 40L).toInt()
                         val fmt = ByteArray(fmtLen)
                         if (fmtLen < 16 || !readFully(stream, fmt, fmtLen)) {
@@ -107,10 +109,10 @@ class WavFile(private val filePath: String) {
                         skip(stream, size - fmtLen)
                         audioFormat = readLittleEndianShort(fmt, 0)
                         channelCount = readLittleEndianShort(fmt, 2)
-                        // fmt[4..7] = sampleRate（4 字节小端）
+                        // fmt[4..7] = sampleRate (4 bytes little-endian)
                         sampleRate = readLittleEndianInt(fmt, 4)
                         bitsPerSample = readLittleEndianShort(fmt, 14)
-                        // WAVE_FORMAT_EXTENSIBLE：真实格式在 subformat GUID 前 2 字节（需至少 26 字节）
+                        // WAVE_FORMAT_EXTENSIBLE: the real format is in the first 2 bytes of the subformat GUID (needs at least 26 bytes)
                         if (audioFormat == WAVE_FORMAT_EXTENSIBLE) {
                             if (fmtLen < 26) {
                                 Log.e(TAG, "Invalid EXTENSIBLE fmt chunk (size $fmtLen)")
@@ -177,7 +179,7 @@ class WavFile(private val filePath: String) {
         if (!isReadMode || fileInputStream == null) return -1
         if (offset < 0 || length < 0 || offset + length > buffer.size) return -1
         if (remainingData <= 0) return -1
-        // 限制在 data chunk 内，避免读到尾部元数据 chunk
+        // Stay within the data chunk to avoid reading trailing metadata chunks
         val toRead = minOf(length.toLong(), remainingData).toInt()
         return try {
             val n = fileInputStream!!.read(buffer, offset, toRead)
@@ -198,7 +200,7 @@ class WavFile(private val filePath: String) {
     val channelLayout: String
         get() = getChannelInfo(channelCount).layout
 
-    // ===== 写侧 =====
+    // ===== Write side =====
 
     fun create(sampleRate: Int, channelCount: Int, bitsPerSample: Int): Boolean {
         if (!validateParameters(sampleRate, channelCount, bitsPerSample)) return false
@@ -236,7 +238,7 @@ class WavFile(private val filePath: String) {
         }
     }
 
-    /** 写侧关闭时回填头部大小；读侧关闭流。返回是否成功关闭。 */
+    /** On close, the write side patches header sizes back; the read side closes the stream. Returns whether closing succeeded. */
     fun close(): Boolean {
         return try {
             if (fileOutputStream != null) {
@@ -258,7 +260,7 @@ class WavFile(private val filePath: String) {
         }
     }
 
-    // ===== 头部与校验 =====
+    // ===== Header and validation =====
 
     private fun writeInitialWavHeader() {
         val header = ByteArray(WAV_HEADER_SIZE).apply {

@@ -24,8 +24,9 @@ import com.example.audiotester.R
 import androidx.core.net.toUri
 
 /**
- * 抽象基类：承载全部共享 UI 接线（观察者、Spinner、按钮状态、错误对话框、权限、onPause 停止）。
- * 子类仅提供特性差异（引擎/section/文案/权限/信息格式/错误翻译）。
+ * Abstract base class: carries all shared UI wiring (observers, Spinner, button states,
+ * error dialog, permissions, stop on onPause).
+ * Subclasses only provide feature-specific differences (engine/section/messages/permissions/info format/error translation).
  */
 abstract class AudioTestFragment : Fragment() {
 
@@ -38,12 +39,14 @@ abstract class AudioTestFragment : Fragment() {
     protected lateinit var configTitleText: TextView
 
     private var isSpinnerInitialized = false
-    // 权限"永久拒绝"判定需先申请过至少一次：首次拒绝时 rationale 尚不可展示，不能误导向设置页
+    // "Permanently denied" detection requires at least one prior request: on first denial the
+    // rationale is not yet available, so we must not misdirect the user to settings
     private var permissionRequestedOnce = false
 
     /**
-     * Activity Result API 申请运行时权限（替代已弃用的 requestPermissions / onRequestPermissionsResult）。
-     * 车机（AAOS）上 Toast 不可见，故用状态栏文本 + 对话框反馈。
+     * Request runtime permissions via the Activity Result API (replaces the deprecated
+     * requestPermissions / onRequestPermissionsResult).
+     * Toasts are invisible on automotive (AAOS), so feedback uses the status bar text + dialog.
      */
     @SuppressLint("SetTextI18n")
     private val permissionLauncher =
@@ -60,11 +63,11 @@ abstract class AudioTestFragment : Fragment() {
             val builder = AlertDialog.Builder(ctx)
                 .setTitle(errorDialogTitle)
                 .setMessage(
-                    if (permanent) "权限被永久拒绝，请前往系统设置手动授予后再试。" else "需要权限才能继续。"
+                    if (permanent) "Permission permanently denied. Please grant it manually in system settings." else "Permission is required to continue."
                 )
                 .setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
             if (permanent) {
-                builder.setNegativeButton("前往设置") { _, _ -> openAppSettings() }
+                builder.setNegativeButton("Go to Settings") { _, _ -> openAppSettings() }
             }
             builder.show()
             statusText.text = "Permission denied"
@@ -106,7 +109,8 @@ abstract class AudioTestFragment : Fragment() {
     }
 
     /**
-     * 引擎以 applicationContext 创建（ViewModel 跨配置变更存活，避免持有已销毁 Activity 泄漏）。
+     * The engine is created with the applicationContext (the ViewModel survives configuration
+     * changes; this avoids leaking a destroyed Activity).
      */
     private fun initViewModel() {
         val app = requireActivity().application
@@ -114,12 +118,14 @@ abstract class AudioTestFragment : Fragment() {
             this, AudioViewModel.Factory(app, { ctx -> createEngine(ctx) }, section, messages)
         )[AudioViewModel::class.java]
 
-        // 视图重建（旋转）时清掉未被消费的错误，避免 LiveData 重放旧错误再弹框
+        // On view recreation (rotation), clear unconsumed errors so LiveData does not replay an
+        // old error and pop the dialog again
         viewModel.clearError()
 
         viewModel.state.observe(viewLifecycleOwner) { updateButtonStates(it) }
         viewModel.statusMessage.observe(viewLifecycleOwner) { statusText.text = it }
-        // 消费即清：防止配置变更时 LiveData 重放最后的错误值再次弹框
+        // Clear on consume: prevents LiveData from replaying the last error value on
+        // configuration changes and popping the dialog again
         viewModel.errorMessage.observe(viewLifecycleOwner) { error ->
             error?.let {
                 handleError(it)
@@ -135,7 +141,7 @@ abstract class AudioTestFragment : Fragment() {
         }
         viewModel.availableConfigs.observe(viewLifecycleOwner) {
             if (configSpinner.adapter != null) {
-                // 重载后适配器已存在，重建以反映新配置列表
+                // After a reload the adapter already exists; rebuild it to reflect the new config list
                 isSpinnerInitialized = false
                 setupConfigSpinner()
             }
@@ -148,8 +154,9 @@ abstract class AudioTestFragment : Fragment() {
                 requestPermission()
                 return@setOnClickListener
             }
-            // 启动窗口内禁用 Start 防止二次点击（双启动 / "Already playing"→ERROR 陷阱）；
-            // 引擎提交后由 state 观察者恢复按钮状态
+            // Disable Start during the startup window to prevent double clicks
+            // (double start / "Already playing" → ERROR trap);
+            // button states are restored by the state observer once the engine commits
             startButton.isEnabled = false
             stopButton.isEnabled = true
             viewModel.start()
@@ -227,7 +234,8 @@ abstract class AudioTestFragment : Fragment() {
         AlertDialog.Builder(requireContext())
             .setTitle(errorDialogTitle)
             .setMessage(userMessage)
-            // 错误已被观察者消费清除（clearError），对话框关闭只负责恢复状态栏文案
+            // The error was already consumed and cleared by the observer (clearError);
+            // closing the dialog only restores the status bar text
             .setPositiveButton("OK") { dialog, _ -> dialog.dismiss(); statusText.text = messages.ready }
             .setCancelable(true)
             .setOnCancelListener { statusText.text = messages.ready }
@@ -237,7 +245,8 @@ abstract class AudioTestFragment : Fragment() {
     }
 
     private fun reloadConfigurations() {
-        // 按选中位置恢复而非 description：description 可能重复（自定义配置），位置与 UI 选中态天然一致
+        // Restore by selected position rather than description: descriptions may be duplicated
+        // (custom configs); position naturally matches the UI selection
         viewModel.reloadConfigurations(configSpinner.selectedItemPosition)
     }
 
@@ -247,9 +256,9 @@ abstract class AudioTestFragment : Fragment() {
             ?: run { infoText.text = "Information" }
     }
 
-    // ===== 权限（各特性仅 requiredPermissions() 不同，逻辑共用）=====
+    // ===== Permissions (features differ only in requiredPermissions(); logic is shared) =====
 
-    /** 当前配置实际需要的运行时权限（子类可按配置裁剪，如播放内置音源无需存储权限） */
+    /** Runtime permissions actually needed by the current config (subclasses may trim per config, e.g. playing a built-in source needs no storage permission) */
     protected open fun permissionsForCurrentConfig(): Array<String> = requiredPermissions()
 
     private fun hasPermission(): Boolean = permissionsForCurrentConfig().all {
@@ -260,25 +269,28 @@ abstract class AudioTestFragment : Fragment() {
         permissionLauncher.launch(permissionsForCurrentConfig())
     }
 
-    /** 打开本应用的系统设置页 */
+    /** Opens this app's page in system settings */
     private fun openAppSettings() {
         val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
             .setData("package:${requireContext().packageName}".toUri())
         startActivity(intent)
     }
 
-    // ===== 互斥：切 Tab 时离开页 RESUMED→STARTED 触发 onPause，退后台同理 =====
+    // ===== Mutual exclusion: switching tabs moves the leaving page RESUMED→STARTED, triggering
+    // onPause; going to background works the same way =====
 
     override fun onPause() {
         super.onPause()
-        // 切 Tab 时离开页 RESUMED→STARTED 触发 onPause；无条件 stop 以覆盖启动中（start 未提交）的竞态
+        // Switching tabs moves the leaving page RESUMED→STARTED, triggering onPause; stop
+        // unconditionally to also cover the startup race (start not yet committed)
         viewModel.stop()
     }
 }
 
 /**
- * 各特性差异文案（ready / preparing / active / stopped / failed）。
- * 其余状态文案（如 "Stopping..."、"Configuration updated: X"、重载结果等）两特性相同，统一为通用文案。
+ * Feature-specific message texts (ready / preparing / active / stopped / failed).
+ * Other status texts (e.g. "Stopping...", "Configuration updated: X", reload results) are the
+ * same for both features and unified as common texts.
  */
 data class AudioMessages(
     val ready: String,

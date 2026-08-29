@@ -18,7 +18,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
     testOptions {
-        // 允许 JVM 单元测试中使用 android.util.Log 等桩方法（返回默认值）
+        // Allow stubbed android.util.Log etc. in JVM unit tests (return default values)
         unitTests.isReturnDefaultValues = true
     }
 }

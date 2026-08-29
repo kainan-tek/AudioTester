@@ -31,7 +31,7 @@ class PlayerFragment : AudioTestFragment() {
             arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
 
-    /** 内置音源（空路径/asset://）读 assets 无需存储权限，跳过权限门 */
+    /** Built-in audio sources (empty path/asset://) read from assets and need no storage permission; skip the permission gate */
     override fun permissionsForCurrentConfig(): Array<String> {
         val path = viewModel.currentConfig.value?.audioFilePath.orEmpty()
         return if (path.isEmpty() || path.startsWith("asset://")) emptyArray() else requiredPermissions()

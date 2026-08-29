@@ -19,7 +19,7 @@ import java.io.IOException
 import java.util.Locale
 
 /**
- * 音频录制器，基于 AudioRecord API。
+ * Audio recorder based on the AudioRecord API.
  */
 class AudioRecorder(private val context: Context) : AudioEngineBase() {
 
@@ -54,9 +54,11 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
             state = AudioState.ACTIVE
             startRecordingLoop()
             if (state != AudioState.ACTIVE) {
-                // 启动窗口内被 stop() 抢先（onCleared/release 等并发路径）：资源已释放，
-                // 再触发 onStarted 会把 UI 卡死在 ACTIVE；与 AudioPlayer 同款防御。
-                // 另覆盖录音循环在 onStarted 前就报错的竞态（handleError → state=ERROR）
+                // stop() got ahead during the startup window (onCleared/release and other
+                // concurrent paths): resources are already released; firing onStarted now would
+                // leave the UI stuck in ACTIVE; same defense as in AudioPlayer.
+                // Also covers the race where the recording loop errors before onStarted
+                // (handleError → state=ERROR)
                 return true
             }
             engineListener?.onStarted()
@@ -96,7 +98,8 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
     }
 
     /**
-     * 输出路径：空或 asset:// → 自动生成 App 私有目录路径（普通安装可用）；否则用配置路径。
+     * Output path: empty or asset:// → auto-generate a path in the app's private directory
+     * (works on normal installs); otherwise use the configured path.
      */
     private fun createOutputFile(): Boolean {
         val outputPath = currentConfig.audioFilePath
@@ -214,15 +217,16 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
                 Log.i(TAG, "Started recording - ${currentConfig.description}")
 
                 while (isActive && state == AudioState.ACTIVE) {
-                    // 录音无自然 EOF：ACTIVE 下 read 返回 ≤0 只能是 track 异常，
-                    // 按错误中止而非伪装成正常完成（catch 的 state 守卫保证停止竞态不误报）
+                    // Recording has no natural EOF: while ACTIVE, read returning <= 0 can only
+                    // mean a track error — abort as an error rather than pretending a normal
+                    // completion (the state guard in catch keeps the stop race from false alarms)
                     val bytesRead = audioRecord.read(buffer, 0, buffer.size)
                     if (bytesRead <= 0) {
                         throw IOException("AudioRecord read failed: $bytesRead")
                     }
 
                     if (!saveFailed && wavFile?.writeAudioData(buffer, 0, bytesRead) != true) {
-                        saveFailed = true  // WavFile 失败即自关闭，重试无意义；录音继续，数据不再落盘
+                        saveFailed = true  // WavFile closes itself on failure, retrying is pointless; recording continues, data is no longer saved
                         Log.e(TAG, "File save failed - recording continues without saving")
                     }
                     totalBytes += bytesRead

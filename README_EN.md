@@ -82,7 +82,7 @@ adb logcat -s AudioPlayer AudioRecorder
 </player>
 ```
 
-External hot-reload: place the file at `/data/audio_configs.xml` (takes priority over assets, needs system privilege, see "Advanced: System-level Deployment"). Configs marked `[需系统权限]` (needs system privilege) fail on normal install — expected behavior.
+External hot-reload: place the file at `/data/audio_configs.xml` (takes priority over assets, needs system privilege, see "Advanced: System-level Deployment"). Configs marked `[requires system permission]` fail on normal install — expected behavior.
 
 ## Known Limitations
 

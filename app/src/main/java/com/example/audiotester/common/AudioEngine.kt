@@ -4,7 +4,7 @@ import android.util.Log
 import kotlin.jvm.Synchronized
 
 /**
- * 音频引擎接口：AudioPlayer（AudioTrack+焦点）与 AudioRecorder（AudioRecord）共同实现。
+ * Audio engine interface: implemented by both AudioPlayer (AudioTrack + focus) and AudioRecorder (AudioRecord).
  */
 interface AudioEngine {
 
@@ -22,12 +22,12 @@ interface AudioEngine {
     fun setListener(listener: Listener?)
 }
 
-/** 统一音频状态枚举（原 PlayerState / RecorderState 结构相同，合并） */
+/** Unified audio state enum (former PlayerState / RecorderState had identical structure, merged) */
 enum class AudioState { IDLE, ACTIVE, ERROR }
 
 /**
- * AudioEngine 公共脚手架：状态/监听器/启停/释放/错误处理单点化。
- * 播放器与录音器只保留真正差异的部分（音频对象初始化、运行循环、start 骨架）。
+ * Common scaffolding for AudioEngine: state/listener/start-stop/release/error handling centralized in one place.
+ * The player and recorder keep only their truly different parts (audio object initialization, run loop, start skeleton).
  */
 abstract class AudioEngineBase : AudioEngine {
 
@@ -35,7 +35,7 @@ abstract class AudioEngineBase : AudioEngine {
 
     @Volatile
     protected var state = AudioState.IDLE
-    // 命名避开 setListener：否则 protected var 生成的 setListener 访问器会与接口方法 JVM 签名冲突
+    // Named to avoid setListener: otherwise the setter generated for this protected var would clash with the interface method's JVM signature
     protected var engineListener: AudioEngine.Listener? = null
     protected var currentConfig: AudioConfig = AudioConfig()
 
@@ -88,12 +88,12 @@ abstract class AudioEngineBase : AudioEngine {
         releaseResources()
     }
 
-    /** 子类：取消运行循环 job（stop 用） */
+    /** Subclass: cancel the run-loop job (used by stop) */
     protected abstract fun cancelJob()
 
-    /** 子类：取消协程作用域（release 用） */
+    /** Subclass: cancel the coroutine scope (used by release) */
     protected abstract fun cancelScope()
 
-    /** 子类：释放音频资源（stop/handleError 用，已由基类加锁） */
+    /** Subclass: release audio resources (used by stop/handleError; already locked by the base class) */
     protected abstract fun releaseAudioResources()
 }

@@ -8,8 +8,8 @@ import java.io.InputStream
 import javax.xml.parsers.DocumentBuilderFactory
 
 /**
- * 统一音频配置（播放域 + 录音域字段超集）。
- * audioFilePath 空值由引擎解释：播放→内置音源；录音→自动生成输出路径。
+ * Unified audio configuration (superset of player + recorder domain fields).
+ * An empty audioFilePath is interpreted by the engine: playback → built-in audio source; recording → auto-generated output path.
  */
 data class AudioConfig(
     val usage: String = "USAGE_MEDIA",
@@ -29,7 +29,7 @@ data class AudioConfig(
 
     companion object {
         private const val TAG = "AudioConfig"
-        /** 单一默认值来源：data class 默认值、parseConfigs 回退、getDefaultConfigs 均以此为基准 */
+        /** Single source of default values: data class defaults, parseConfigs fallbacks, and getDefaultConfigs are all based on this */
         private val DEFAULT = AudioConfig()
 
         fun loadConfigs(context: Context, section: String): List<AudioConfig> {
@@ -43,7 +43,7 @@ data class AudioConfig(
             }
         }
 
-        /** 解析失败 → 兜底默认（纯 JVM 流输入，可单测） */
+        /** Parse failure → fallback defaults (pure JVM stream input, unit-testable) */
         internal fun loadConfigsFromRaw(xml: InputStream, section: String): List<AudioConfig> =
             try {
                 parseConfigs(xml, section)
@@ -52,13 +52,13 @@ data class AudioConfig(
                 getDefaultConfigs(section)
             }
 
-        /** section 缺失视为解析失败（由 loadConfigsFromRaw 兜底）；空 section 返回空列表 */
+        /** A missing section is treated as a parse failure (loadConfigsFromRaw provides the fallback); an empty section returns an empty list */
         internal fun parseConfigs(xml: InputStream, section: String): List<AudioConfig> {
             val sectionElement = DocumentBuilderFactory.newInstance().newDocumentBuilder()
                 .parse(xml).documentElement.getElementsByTagName(section).item(0) as Element?
                 ?: throw IllegalArgumentException("Missing section: $section")
             val entries = sectionElement.getElementsByTagName("config")
-            // 单条坏配置只跳过该条，不拖垮整个 section 回退 emergency
+            // A single bad config entry only skips that entry, without dragging the whole section into the emergency fallback
             return (0 until entries.length).mapNotNull { i ->
                 runCatching {
                     val c = entries.item(i) as Element
@@ -99,7 +99,8 @@ data class AudioConfig(
 }
 
 /**
- * XML 配置流加载器：外部 /data 文件优先，否则读 assets（XML 原生支持注释，无需预处理）。
+ * XML configuration stream loader: external /data file first, otherwise read from assets
+ * (XML natively supports comments, no preprocessing needed).
  */
 object ConfigLoader {
     private const val TAG = "ConfigLoader"
@@ -116,7 +117,7 @@ object ConfigLoader {
     }
 }
 
-/** 子元素文本读取：元素缺失 → 默认值 */
+/** Reads child element text: missing element → default value */
 private fun Element.childText(name: String, default: String): String =
     getElementsByTagName(name).item(0)?.textContent?.trim() ?: default
 

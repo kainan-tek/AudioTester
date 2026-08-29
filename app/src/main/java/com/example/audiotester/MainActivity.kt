@@ -11,8 +11,9 @@ import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
 
 /**
- * 宿主 Activity：顶部 Tab（播放/录音）+ ViewPager2。
- * 互斥由各 Fragment 的 onPause 停止自动达成（切 Tab 时离开页触发 onPause），无需额外接线。
+ * Host Activity: top tabs (Player/Recorder) + ViewPager2.
+ * Mutual exclusion is achieved automatically by stopping in each Fragment's onPause
+ * (switching tabs triggers onPause on the page being left); no extra wiring needed.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -30,7 +31,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         TabLayoutMediator(tabLayout, viewPager) { tab, position ->
-            tab.text = if (position == 0) "播放" else "录音"
+            tab.text = if (position == 0) "Playback" else "Recording"
         }.attach()
     }
 }

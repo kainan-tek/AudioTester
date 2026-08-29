@@ -9,7 +9,7 @@ import java.io.File
 class AudioConfigTest {
 
     private val xml = """
-        <!-- 播放/录音配置（XML 原生注释） -->
+        <!-- Playback/recording configs (native XML comment) -->
         <audioConfigs>
           <player>
             <config>
@@ -51,7 +51,7 @@ class AudioConfigTest {
         assertEquals(1, configs.size)
         assertEquals("MIC", configs[0].audioSource)
         assertEquals(48000, configs[0].sampleRate)
-        assertEquals("", configs[0].audioFilePath)  // 省略 → 空 → 引擎自动生成路径
+        assertEquals("", configs[0].audioFilePath)  // omitted → empty → engine auto-generates a path
     }
 
     @Test
@@ -84,7 +84,8 @@ class AudioConfigTest {
 
     @Test
     fun emptySection_returnsEmptyList() {
-        // 空 section 非解析失败：保持空列表（ViewModel 层以 isNotEmpty 兜底提示），与原有行为一致
+        // An empty section is not a parse failure: keep the empty list (the ViewModel layer
+        // guards with isNotEmpty for the hint); consistent with the original behavior
         val configs = AudioConfig.parseConfigs(
             stream("""<audioConfigs><player/><recorder/></audioConfigs>"""), "player"
         )
@@ -115,7 +116,8 @@ class AudioConfigTest {
 
     @Test
     fun realAssetsFile_parsesBothSections() {
-        // 直接解析源码树中的真实资产，防 XML 笔误只在上设备后才暴露
+        // Parse the real asset from the source tree directly, so XML typos surface here
+        // instead of only after deployment to a device
         val file = File("src/main/assets/audio_configs.xml")
         val player = file.inputStream().use { AudioConfig.parseConfigs(it, "player") }
         val recorder = file.inputStream().use { AudioConfig.parseConfigs(it, "recorder") }
@@ -126,7 +128,8 @@ class AudioConfigTest {
 
     @Test
     fun invalidBufferMultiplier_skipsOnlyThatEntry() {
-        // require(bufferMultiplier > 0) 抛出 → runCatching 只跳过该条，不拖垮整个 section
+        // require(bufferMultiplier > 0) throws → runCatching skips only that entry,
+        // without taking down the whole section
         val configs = AudioConfig.parseConfigs(
             stream("""
                 <audioConfigs>
