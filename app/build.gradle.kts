@@ -32,4 +32,12 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.viewpager2)
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.androidx.arch.core.testing)
+    testImplementation(libs.mockito.core)
+}
+
+// Test JDK is newer than the Byte Buddy version pulled in by Mockito supports
+tasks.withType<Test>().configureEach {
+    jvmArgs("-Dnet.bytebuddy.experimental=true")
 }

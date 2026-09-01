@@ -35,7 +35,7 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
     private var recordingJob: Job? = null
     private val recordingScope = CoroutineScope(Dispatchers.IO)
 
-    override fun start(): Boolean {
+    override fun doStart(): Boolean {
         Log.d(TAG, "Starting recording")
 
         if (state == AudioState.ACTIVE) {
@@ -53,14 +53,6 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
 
             state = AudioState.ACTIVE
             startRecordingLoop()
-            if (state != AudioState.ACTIVE) {
-                // stop() got ahead during the startup window (onCleared/release and other
-                // concurrent paths): resources are already released; firing onStarted now would
-                // leave the UI stuck in ACTIVE; same defense as in AudioPlayer.
-                // Also covers the race where the recording loop errors before onStarted
-                // (handleError → state=ERROR)
-                return true
-            }
             engineListener?.onStarted()
 
             Log.i(TAG, "Recording started successfully")
@@ -247,13 +239,9 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
                     stop()
                 }
             } catch (e: SecurityException) {
-                if (state == AudioState.ACTIVE) {
-                    handleError("${AudioConstants.ErrorTypes.PERMISSION} Recording permission denied: ${e.message}")
-                }
+                handleLoopError("${AudioConstants.ErrorTypes.PERMISSION} Recording permission denied: ${e.message}")
             } catch (e: Exception) {
-                if (state == AudioState.ACTIVE) {
-                    handleError("${AudioConstants.ErrorTypes.STREAM} Recording error: ${e.message}")
-                }
+                handleLoopError("${AudioConstants.ErrorTypes.STREAM} Recording error: ${e.message}")
             }
         }
     }

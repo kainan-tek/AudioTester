@@ -135,7 +135,7 @@ abstract class AudioTestFragment : Fragment() {
         viewModel.currentConfig.observe(viewLifecycleOwner) { config ->
             config?.let {
                 updateInfo()
-                updateSpinnerSelection(it.description)
+                updateSpinnerSelection(it)
                 if (configSpinner.adapter == null) setupConfigSpinner()
             }
         }
@@ -175,7 +175,8 @@ abstract class AudioTestFragment : Fragment() {
         configSpinner.adapter = adapter
 
         viewModel.currentConfig.value?.let { current ->
-            val index = configs.indexOfFirst { it.description == current.description }
+            // Value equality, not description: descriptions may be duplicated in custom configs
+            val index = configs.indexOf(current)
             if (index >= 0) configSpinner.setSelection(index)
         }
 
@@ -199,9 +200,8 @@ abstract class AudioTestFragment : Fragment() {
         }
     }
 
-    private fun updateSpinnerSelection(description: String) {
-        val configs = viewModel.getAllAudioConfigs()
-        val index = configs.indexOfFirst { it.description == description }
+    private fun updateSpinnerSelection(config: AudioConfig) {
+        val index = viewModel.getAllAudioConfigs().indexOf(config)
         if (index >= 0 && index != configSpinner.selectedItemPosition) {
             isSpinnerInitialized = false
             configSpinner.setSelection(index)

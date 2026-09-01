@@ -182,9 +182,16 @@ class WavFile(private val filePath: String) {
         // Stay within the data chunk to avoid reading trailing metadata chunks
         val toRead = minOf(length.toLong(), remainingData).toInt()
         return try {
-            val n = fileInputStream!!.read(buffer, offset, toRead)
-            if (n > 0) remainingData -= n
-            n
+            // Loop until the block is complete: InputStream.read may return fewer bytes than
+            // requested, and the player relies on frame-aligned blocks
+            var total = 0
+            while (total < toRead) {
+                val n = fileInputStream!!.read(buffer, offset + total, toRead - total)
+                if (n < 0) break
+                total += n
+            }
+            remainingData -= total
+            if (total > 0) total else -1
         } catch (e: IOException) {
             Log.e(TAG, "Failed to read data", e)
             close()

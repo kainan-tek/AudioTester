@@ -39,11 +39,31 @@ abstract class AudioEngineBase : AudioEngine {
     protected var engineListener: AudioEngine.Listener? = null
     protected var currentConfig: AudioConfig = AudioConfig()
 
+    // All state transitions (start/stop/handleError/release) hold the engine lock, so they
+    // serialize against each other instead of interleaving
+    private var released = false
+
     override fun setListener(listener: AudioEngine.Listener?) {
         engineListener = listener
     }
 
     override fun isActive(): Boolean = state == AudioState.ACTIVE
+
+    /**
+     * Template start: holds the engine lock, so a stop()/release() landing mid-start waits
+     * behind it instead of interleaving with it
+     */
+    @Synchronized
+    final override fun start(): Boolean {
+        if (released) {
+            Log.w(tag, "Ignoring start: engine is released")
+            return false
+        }
+        return doStart()
+    }
+
+    /** Subclass start implementation; always invoked under the engine lock */
+    protected abstract fun doStart(): Boolean
 
     override fun setAudioConfig(config: AudioConfig) {
         if (state == AudioState.ACTIVE) {
@@ -65,7 +85,9 @@ abstract class AudioEngineBase : AudioEngine {
         Log.i(tag, "Stopped")
     }
 
+    @Synchronized
     override fun release() {
+        released = true
         stop()
         engineListener = null
         try {
@@ -81,11 +103,18 @@ abstract class AudioEngineBase : AudioEngine {
         releaseAudioResources()
     }
 
+    /** Mark ERROR, notify, release. Caller must hold the engine lock (doStart failure paths, handleLoopError) */
     protected fun handleError(message: String) {
         state = AudioState.ERROR
         Log.e(tag, "Error: $message")
         engineListener?.onError(message)
         releaseResources()
+    }
+
+    /** Run-loop failure: a stop() that completed first is a clean exit, not an error */
+    @Synchronized
+    protected fun handleLoopError(message: String) {
+        if (state == AudioState.ACTIVE) handleError(message)
     }
 
     /** Subclass: cancel the run-loop job (used by stop) */

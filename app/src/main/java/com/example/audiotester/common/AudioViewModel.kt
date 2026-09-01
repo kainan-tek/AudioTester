@@ -7,6 +7,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -20,6 +21,8 @@ class AudioViewModel(
     private val engine: AudioEngine,
     private val section: String,
     private val messages: AudioMessages,
+    // Injectable for deterministic interleaving control in unit tests
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : AndroidViewModel(application) {
 
     private val _state = MutableLiveData(AudioState.IDLE)
@@ -37,7 +40,7 @@ class AudioViewModel(
     private val _availableConfigs = MutableLiveData<List<AudioConfig>>()
     val availableConfigs: LiveData<List<AudioConfig>> = _availableConfigs
 
-    @Volatile
+    // Only touched on the main thread (start/stop/onStarted)
     private var stopRequested = false
 
     init {
@@ -47,7 +50,7 @@ class AudioViewModel(
     }
 
     private fun loadConfigurations() {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(ioDispatcher) {
             val configs = AudioConfig.loadConfigs(getApplication(), section)
             updateUI({
                 _availableConfigs.value = configs
@@ -69,7 +72,7 @@ class AudioViewModel(
             }, clearError = false)
             return
         }
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(ioDispatcher) {
             // loadConfigs already catches all exceptions internally (failures fall back to emergency defaults); no extra try needed here
             val configs = AudioConfig.loadConfigs(getApplication(), section)
             updateUI({
@@ -97,13 +100,8 @@ class AudioViewModel(
         if (_state.value == AudioState.ERROR) _state.value = AudioState.IDLE
         _statusMessage.value = messages.preparing
 
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(ioDispatcher) {
             val success = engine.start()
-            if (success && stopRequested) {
-                // Canceled by stop() during startup (e.g. tab-switch mutual exclusion); stop immediately
-                engine.stop()
-                return@launch
-            }
             if (!success) {
                 updateUI({
                     if (_state.value != AudioState.ERROR) {
@@ -150,8 +148,15 @@ class AudioViewModel(
         engine.setListener(object : AudioEngine.Listener {
             override fun onStarted() {
                 updateUI({
-                    _state.value = AudioState.ACTIVE
-                    _statusMessage.value = messages.active
+                    if (stopRequested) {
+                        // stop() landed during the startup window: _state was still IDLE so only
+                        // the flag was set. The engine has committed by now — stop it for real;
+                        // the resulting onStopped syncs the UI back to IDLE
+                        engine.stop()
+                    } else {
+                        _state.value = AudioState.ACTIVE
+                        _statusMessage.value = messages.active
+                    }
                 })
             }
 

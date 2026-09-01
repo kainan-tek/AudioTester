@@ -8,11 +8,85 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.io.FileInputStream
+import java.io.InputStream
 
 class WavFileTest {
 
     @get:Rule
     val tempFolder = TemporaryFolder()
+
+    /** Delivers one byte per read: InputStream allows short reads; readData must heal them into full blocks */
+    private class OneByteAtATimeStream(private val source: InputStream) : InputStream() {
+        override fun read(): Int = source.read()
+        override fun read(buffer: ByteArray, off: Int, len: Int): Int =
+            if (len <= 0) source.read(buffer, off, len) else source.read(buffer, off, 1)
+    }
+
+    @Test
+    fun readData_fillsWholeBufferDespiteShortReads() {
+        val file = File(tempFolder.root, "shortreads.wav")
+        val writer = WavFile(file.absolutePath)
+        assertTrue(writer.create(48000, 2, 16))
+        val data = ByteArray(4000) { (it % 251).toByte() }
+        assertTrue(writer.writeAudioData(data, 0, data.size))
+        assertTrue(writer.close())
+
+        val reader = WavFile(file.absolutePath)
+        assertTrue(reader.open(OneByteAtATimeStream(FileInputStream(file))))
+        val buffer = ByteArray(400)
+        assertEquals(400, reader.readData(buffer, 0, buffer.size))
+        assertArrayEquals(data.copyOfRange(0, 400), buffer)
+        repeat(9) { assertEquals(400, reader.readData(buffer, 0, buffer.size)) }
+        assertEquals(-1, reader.readData(buffer, 0, buffer.size))
+        reader.close()
+    }
+
+    @Test
+    fun readData_partialFinalBlock_returnsShortThenEof() {
+        // data chunk of 6 bytes = 1.5 frames at blockAlign 4: the partial tail is returned
+        // once, then EOF — the read loop must stop at the data boundary, not hang or skip
+        val file = File(tempFolder.root, "partial_tail.wav")
+        val writer = WavFile(file.absolutePath)
+        assertTrue(writer.create(8000, 2, 16))
+        assertTrue(writer.writeAudioData(ByteArray(6), 0, 6))
+        assertTrue(writer.close())
+
+        val reader = WavFile(file.absolutePath)
+        assertTrue(reader.open(OneByteAtATimeStream(FileInputStream(file))))
+        assertEquals(6, reader.readData(ByteArray(100), 0, 100))
+        assertEquals(-1, reader.readData(ByteArray(100), 0, 100))
+        reader.close()
+    }
+
+    @Test
+    fun readData_truncatedFile_returnsAvailableBytesThenEof() {
+        // Header declares 100 data bytes but the file ends after 60: readData returns the
+        // available bytes once, then -1 (no crash, no infinite loop)
+        val data = ByteArray(60)
+        val header = ByteArray(44).also { h ->
+            "RIFF".toByteArray().copyInto(h, 0)
+            h.putLeInt(4, 36 + 100)           // riff size as if the data were complete
+            "WAVE".toByteArray().copyInto(h, 8)
+            "fmt ".toByteArray().copyInto(h, 12)
+            h.putLeInt(16, 16)                // fmt chunk size
+            h.putLeShort(20, 1)               // PCM
+            h.putLeShort(22, 2)               // channels
+            h.putLeInt(24, 8000)              // sample rate
+            h.putLeInt(28, 32000)             // byte rate
+            h.putLeShort(32, 4)               // block align
+            h.putLeShort(34, 16)              // bits per sample
+            "data".toByteArray().copyInto(h, 36)
+            h.putLeInt(40, 100)               // declared data size > actual file content
+        }
+        val file = File(tempFolder.root, "truncated_data.wav")
+        file.writeBytes(header + data)
+
+        val reader = WavFile(file.absolutePath)
+        assertTrue(reader.open())
+        assertEquals(60, reader.readData(ByteArray(100), 0, 100))
+        assertEquals(-1, reader.readData(ByteArray(100), 0, 100))
+        reader.close()
+    }
 
     @Test
     fun writeThenRead_roundTrip() {

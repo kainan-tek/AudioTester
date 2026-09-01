@@ -41,7 +41,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
     private var playbackJob: Job? = null
     private val playbackScope = CoroutineScope(Dispatchers.IO)
 
-    override fun start(): Boolean {
+    override fun doStart(): Boolean {
         Log.d(TAG, "Starting playback")
 
         if (state == AudioState.ACTIVE) {
@@ -59,12 +59,6 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
 
             state = AudioState.ACTIVE
             startPlaybackLoop()
-            if (state != AudioState.ACTIVE) {
-                // stop() got ahead during the startup window (e.g. focus-loss callback):
-                // resources were already released by stop and the UI was synced by onStopped;
-                // firing onStarted now would leave the UI stuck in ACTIVE
-                return true
-            }
             engineListener?.onStarted()
 
             Log.i(TAG, "Playback started successfully")
@@ -305,13 +299,25 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                         break
                     }
 
-                    // The block is frame-aligned: the blocking write()'s internal drain loop
-                    // either consumes all whole frames or errors out (partial success is always
-                    // followed by an error code). Treat a short write as an exception — fail
-                    // loudly to expose platform issues
-                    val bytesWritten = audioTrack.write(buffer, 0, bytesRead)
-                    if (bytesWritten != bytesRead) {
-                        throw IOException("AudioTrack write incomplete: $bytesWritten/$bytesRead")
+                    // Drop a partial trailing frame (malformed data chunk / truncated file):
+                    // readData fills the buffer fully on all earlier blocks, so this is a
+                    // last-block-only case; write() could never consume the leftover partial frame
+                    val alignedBytes = bytesRead - bytesRead % bytesPerFrame
+                    if (alignedBytes == 0) {
+                        readLoopEnded = true
+                        break
+                    }
+
+                    // The blocking write()'s internal drain loop either consumes all whole
+                    // frames or errors out (partial success is always followed by an error
+                    // code). Treat a short write as an exception — fail loudly to expose platform issues
+                    val bytesWritten = audioTrack.write(buffer, 0, alignedBytes)
+                    if (bytesWritten != alignedBytes) {
+                        throw IOException("AudioTrack write incomplete: $bytesWritten/$alignedBytes")
+                    }
+                    if (alignedBytes != bytesRead) {
+                        readLoopEnded = true   // partial tail = end of data; drain and stop below
+                        break
                     }
                     totalBytes += bytesWritten
                     if (totalBytes - lastLoggedBytes >= 5 * 1024 * 1024L) {
@@ -343,9 +349,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                     stop()
                 }
             } catch (e: Exception) {
-                if (state == AudioState.ACTIVE) {
-                    handleError("${AudioConstants.ErrorTypes.STREAM} Playback error: ${e.message}")
-                }
+                handleLoopError("${AudioConstants.ErrorTypes.STREAM} Playback error: ${e.message}")
             }
         }
     }
