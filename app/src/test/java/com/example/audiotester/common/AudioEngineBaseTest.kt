@@ -36,21 +36,19 @@ class AudioEngineBaseTest {
             releaseDone.countDown()
         }
 
-        override fun doStart(): Boolean {
-            if (state == AudioState.ACTIVE) {
-                engineListener?.onError("Already active")
-                return false
-            }
+        override val alreadyActiveMessage = "Already active"
+        override val permissionDeniedMessage = "Permission denied"
+        override val startupFailedMessage = "Start failed"
+        override val startedMessage = "Started"
+
+        override fun openResources(): Boolean {
             enteredStart.countDown()
             startLatch.await()
-            if (!startResult) return false
-            state = AudioState.ACTIVE
-            engineListener?.onStarted()
-            return true
+            return startResult
         }
 
-        override fun cancelJob() {}
-        override fun cancelScope() {}
+        override fun initializeAudio() = true
+        override fun startLoop() {}
         override fun releaseAudioResources() { releaseCount.incrementAndGet() }
 
         fun forceActive() { state = AudioState.ACTIVE }

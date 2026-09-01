@@ -11,16 +11,11 @@ import com.example.audiotester.common.AudioConstants
 import com.example.audiotester.common.AudioEngineBase
 import com.example.audiotester.common.AudioState
 import com.example.audiotester.common.WavFile
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.IOException
 import java.util.Locale
-import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Audio player based on the AudioTrack API.
@@ -38,47 +33,10 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
     private var audioFocusRequest: AudioFocusRequest? = null
     private var wavFile: WavFile? = null
 
-    private var playbackJob: Job? = null
-    private val playbackScope = CoroutineScope(Dispatchers.IO)
-
-    override fun doStart(): Boolean {
-        Log.d(TAG, "Starting playback")
-
-        if (state == AudioState.ACTIVE) {
-            Log.w(TAG, "Already playing")
-            engineListener?.onError("Already playing")
-            return false
-        }
-        if (state == AudioState.ERROR) {
-            state = AudioState.IDLE
-        }
-
-        return try {
-            if (!openAudioFile()) return false
-            if (!initializeAudioTrack()) return false
-
-            state = AudioState.ACTIVE
-            startPlaybackLoop()
-            engineListener?.onStarted()
-
-            Log.i(TAG, "Playback started successfully")
-            true
-        } catch (e: SecurityException) {
-            handleError("${AudioConstants.ErrorTypes.PERMISSION} Permission denied: ${e.message}")
-            false
-        } catch (e: Exception) {
-            handleError("${AudioConstants.ErrorTypes.STREAM} Playback initialization failed: ${e.message}")
-            false
-        }
-    }
-
-    override fun cancelJob() {
-        playbackJob?.cancel()
-    }
-
-    override fun cancelScope() {
-        playbackScope.cancel()
-    }
+    override val alreadyActiveMessage = "Already playing"
+    override val permissionDeniedMessage = "Permission denied"
+    override val startupFailedMessage = "Playback initialization failed"
+    override val startedMessage = "Playback started successfully"
 
     override fun releaseAudioResources() {
         try {
@@ -101,7 +59,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
     /**
      * Opens the audio file. Empty path → built-in source; asset:// prefix → assets; otherwise → regular file.
      */
-    private fun openAudioFile(): Boolean {
+    override fun openResources(): Boolean {
         val path = currentConfig.audioFilePath.ifEmpty { AudioConstants.DEFAULT_AUDIO_FILE }
         wavFile = WavFile(path)
         val opened = if (path.startsWith("asset://")) {
@@ -127,7 +85,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
         return true
     }
 
-    private fun initializeAudioTrack(): Boolean {
+    override fun initializeAudio(): Boolean {
         val wavFile = wavFile ?: return false
 
         try {
@@ -264,8 +222,8 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
         }
     }
 
-    private fun startPlaybackLoop() {
-        playbackJob = playbackScope.launch {
+    override fun startLoop() {
+        loopJob = loopScope.launch {
             val wavFile = wavFile ?: return@launch
             val audioTrack = audioTrack ?: return@launch
 
@@ -320,7 +278,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                         break
                     }
                     totalBytes += bytesWritten
-                    if (totalBytes - lastLoggedBytes >= 5 * 1024 * 1024L) {
+                    if (totalBytes - lastLoggedBytes >= PROGRESS_LOG_INTERVAL_BYTES) {
                         val mbPlayed = totalBytes / (1024.0 * 1024.0)
                         Log.v(TAG, "Progress: %.1fMB".format(Locale.US, mbPlayed))
                         lastLoggedBytes = totalBytes
@@ -341,7 +299,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                         while (isActive && state == AudioState.ACTIVE &&
                             audioTrack.playbackHeadPosition < framesWritten &&
                             SystemClock.elapsedRealtime() < deadline) {
-                            delay(10.milliseconds)
+                            delay(10)
                         }
                     }
                     val mbTotal = totalBytes / (1024.0 * 1024.0)

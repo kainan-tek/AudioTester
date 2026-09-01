@@ -81,19 +81,9 @@ data class AudioConfig(
         }
 
         internal fun getDefaultConfigs(section: String): List<AudioConfig> = when (section) {
-            "player" -> listOf(
-                AudioConfig(
-                    usage = "USAGE_MEDIA", contentType = "CONTENT_TYPE_MUSIC",
-                    performanceMode = "PERFORMANCE_MODE_POWER_SAVING",
-                    bufferMultiplier = 2, description = "Emergency Fallback - Media Playback"
-                )
-            )
-            else -> listOf(
-                AudioConfig(
-                    audioSource = "MIC", sampleRate = 48000, channelCount = 2, audioFormat = 16,
-                    bufferMultiplier = 2, description = "Emergency Fallback - Stereo Recording"
-                )
-            )
+            // All other values come from the data-class defaults (DEFAULT)
+            "player" -> listOf(AudioConfig(description = "Emergency Fallback - Media Playback"))
+            else -> listOf(AudioConfig(description = "Emergency Fallback - Stereo Recording"))
         }
     }
 }

@@ -1,6 +1,10 @@
 package com.example.audiotester.common
 
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlin.jvm.Synchronized
 
 /**
@@ -39,9 +43,18 @@ abstract class AudioEngineBase : AudioEngine {
     protected var engineListener: AudioEngine.Listener? = null
     protected var currentConfig: AudioConfig = AudioConfig()
 
+    // Feature-specific texts surfaced by the shared start() skeleton
+    protected abstract val alreadyActiveMessage: String
+    protected abstract val permissionDeniedMessage: String
+    protected abstract val startupFailedMessage: String
+    protected abstract val startedMessage: String
+
     // All state transitions (start/stop/handleError/release) hold the engine lock, so they
     // serialize against each other instead of interleaving
     private var released = false
+
+    protected val loopScope = CoroutineScope(Dispatchers.IO)
+    protected var loopJob: Job? = null
 
     override fun setListener(listener: AudioEngine.Listener?) {
         engineListener = listener
@@ -50,8 +63,8 @@ abstract class AudioEngineBase : AudioEngine {
     override fun isActive(): Boolean = state == AudioState.ACTIVE
 
     /**
-     * Template start: holds the engine lock, so a stop()/release() landing mid-start waits
-     * behind it instead of interleaving with it
+     * The single copy of the start state machine: guards → open → initialize → commit →
+     * notify. Subclasses provide resource-specific hooks and texts; always under the engine lock.
      */
     @Synchronized
     final override fun start(): Boolean {
@@ -59,11 +72,37 @@ abstract class AudioEngineBase : AudioEngine {
             Log.w(tag, "Ignoring start: engine is released")
             return false
         }
-        return doStart()
+        if (state == AudioState.ACTIVE) {
+            Log.w(tag, alreadyActiveMessage)
+            engineListener?.onError(alreadyActiveMessage)
+            return false
+        }
+        if (state == AudioState.ERROR) state = AudioState.IDLE
+        return try {
+            if (!openResources()) return false
+            if (!initializeAudio()) return false
+            state = AudioState.ACTIVE
+            startLoop()
+            engineListener?.onStarted()
+            Log.i(tag, startedMessage)
+            true
+        } catch (e: SecurityException) {
+            handleError("${AudioConstants.ErrorTypes.PERMISSION} $permissionDeniedMessage: ${e.message}")
+            false
+        } catch (e: Exception) {
+            handleError("${AudioConstants.ErrorTypes.STREAM} $startupFailedMessage: ${e.message}")
+            false
+        }
     }
 
-    /** Subclass start implementation; always invoked under the engine lock */
-    protected abstract fun doStart(): Boolean
+    /** Subclass: open the session's file/resource; report failures via handleError, return false */
+    protected abstract fun openResources(): Boolean
+
+    /** Subclass: build the AudioTrack/AudioRecord; report failures via handleError, return false */
+    protected abstract fun initializeAudio(): Boolean
+
+    /** Subclass: launch the run loop on loopScope (assign loopJob) */
+    protected abstract fun startLoop()
 
     override fun setAudioConfig(config: AudioConfig) {
         if (state == AudioState.ACTIVE) {
@@ -79,8 +118,8 @@ abstract class AudioEngineBase : AudioEngine {
         Log.d(tag, "Stopping")
         if (state != AudioState.ACTIVE) return
         state = AudioState.IDLE
-        cancelJob()
-        releaseResources()
+        loopJob?.cancel()
+        releaseAudioResources()
         engineListener?.onStopped()
         Log.i(tag, "Stopped")
     }
@@ -90,25 +129,16 @@ abstract class AudioEngineBase : AudioEngine {
         released = true
         stop()
         engineListener = null
-        try {
-            cancelScope()
-        } catch (e: Exception) {
-            Log.w(tag, "Error canceling scope", e)
-        }
+        loopScope.cancel()
         Log.d(tag, "Engine resources released")
     }
 
-    @Synchronized
-    protected fun releaseResources() {
-        releaseAudioResources()
-    }
-
-    /** Mark ERROR, notify, release. Caller must hold the engine lock (doStart failure paths, handleLoopError) */
+    /** Mark ERROR, notify, release. Caller must hold the engine lock (start failure paths, handleLoopError) */
     protected fun handleError(message: String) {
         state = AudioState.ERROR
         Log.e(tag, "Error: $message")
         engineListener?.onError(message)
-        releaseResources()
+        releaseAudioResources()
     }
 
     /** Run-loop failure: a stop() that completed first is a clean exit, not an error */
@@ -117,12 +147,11 @@ abstract class AudioEngineBase : AudioEngine {
         if (state == AudioState.ACTIVE) handleError(message)
     }
 
-    /** Subclass: cancel the run-loop job (used by stop) */
-    protected abstract fun cancelJob()
+    companion object {
+        /** Run-loop progress logging cadence */
+        protected const val PROGRESS_LOG_INTERVAL_BYTES = 5 * 1024 * 1024L
+    }
 
-    /** Subclass: cancel the coroutine scope (used by release) */
-    protected abstract fun cancelScope()
-
-    /** Subclass: release audio resources (used by stop/handleError; already locked by the base class) */
+    /** Subclass: release audio resources (stop/handleError paths; always under the engine lock) */
     protected abstract fun releaseAudioResources()
 }

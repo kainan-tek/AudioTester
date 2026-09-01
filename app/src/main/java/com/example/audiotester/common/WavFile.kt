@@ -30,8 +30,6 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
 
     private var fileInputStream: InputStream? = null
     private var fileOutputStream: FileOutputStream? = null
-    private var isReadMode = false
-    private var isWriteMode = false
     private var remainingData = 0L
 
     var sampleRate: Int = 0
@@ -69,19 +67,19 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
     fun open(stream: InputStream): Boolean {
         Log.d(TAG, "Opening WAV stream: $filePath")
         close()
+        // Failure paths leave the stream closed; a successful open keeps it (read side owns it)
+        var opened = false
         try {
             // RIFF/WAVE header (12 bytes), then iterate over chunks
             val riff = ByteArray(12)
             if (!readFully(stream, riff, riff.size)) {
                 Log.e(TAG, "Cannot read WAV RIFF header")
-                stream.close()
                 return false
             }
             if (String(riff, RIFF_OFFSET, 4) != "RIFF" ||
                 String(riff, WAVE_OFFSET, 4) != "WAVE"
             ) {
                 Log.e(TAG, "Not a valid WAV file")
-                stream.close()
                 return false
             }
 
@@ -91,7 +89,6 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
                 val header = ByteArray(8)
                 if (!readFully(stream, header, header.size)) {
                     Log.e(TAG, "Missing data chunk")
-                    stream.close()
                     return false
                 }
                 // chunk size: header[4..7] (4 bytes little-endian, unsigned; mask restores the unsigned value)
@@ -103,7 +100,6 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
                         val fmt = ByteArray(fmtLen)
                         if (fmtLen < 16 || !readFully(stream, fmt, fmtLen)) {
                             Log.e(TAG, "Invalid fmt chunk")
-                            stream.close()
                             return false
                         }
                         skip(stream, size - fmtLen)
@@ -116,7 +112,6 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
                         if (audioFormat == WAVE_FORMAT_EXTENSIBLE) {
                             if (fmtLen < 26) {
                                 Log.e(TAG, "Invalid EXTENSIBLE fmt chunk (size $fmtLen)")
-                                stream.close()
                                 return false
                             }
                             audioFormat = readLittleEndianShort(fmt, 24)
@@ -134,17 +129,15 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
 
             if (audioFormat != AUDIO_FORMAT_PCM) {
                 Log.e(TAG, "Unsupported WAV format (only PCM=1 is supported)")
-                stream.close()
                 return false
             }
             if (!validateParameters(sampleRate, channelCount, bitsPerSample)) {
-                stream.close()
                 return false
             }
 
             remainingData = dataLength
             fileInputStream = stream
-            isReadMode = true
+            opened = true
             Log.i(
                 TAG, "WAV opened: ${sampleRate}Hz, ${channelCount}ch, ${bitsPerSample}bit, " +
                     "duration ${String.format(java.util.Locale.US, "%.2f", duration)}s"
@@ -152,8 +145,11 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
             return true
         } catch (e: IOException) {
             Log.e(TAG, "Failed to open WAV stream", e)
-            try { stream.close() } catch (_: IOException) {}
             return false
+        } finally {
+            if (!opened) {
+                try { stream.close() } catch (_: IOException) {}
+            }
         }
     }
 
@@ -178,7 +174,7 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
     }
 
     fun readData(buffer: ByteArray, offset: Int, length: Int): Int {
-        if (!isReadMode || fileInputStream == null) return -1
+        val stream = fileInputStream ?: return -1
         if (offset < 0 || length < 0 || offset + length > buffer.size) return -1
         if (remainingData <= 0) return -1
         // Stay within the data chunk to avoid reading trailing metadata chunks
@@ -188,7 +184,7 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
             // requested, and the player relies on frame-aligned blocks
             var total = 0
             while (total < toRead) {
-                val n = fileInputStream!!.read(buffer, offset + total, toRead - total)
+                val n = stream.read(buffer, offset + total, toRead - total)
                 if (n < 0) break
                 total += n
             }
@@ -201,7 +197,7 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
         }
     }
 
-    fun isValid(): Boolean = isReadMode && sampleRate > 0 && channelCount > 0 && bitsPerSample > 0
+    fun isValid(): Boolean = fileInputStream != null && sampleRate > 0 && channelCount > 0 && bitsPerSample > 0
 
     val channelDescription: String
         get() = getChannelInfo(channelCount).description
@@ -221,9 +217,8 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
             val file = File(filePath)
             file.parentFile?.mkdirs()
             fileOutputStream = FileOutputStream(file)
-            writeInitialWavHeader()
-            isWriteMode = true
             dataLength = 0L
+            writeInitialWavHeader()
             Log.i(TAG, "WAV created: ${sampleRate}Hz, ${channelCount}ch, ${bitsPerSample}bit")
             true
         } catch (e: IOException) {
@@ -234,7 +229,7 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
     }
 
     fun writeAudioData(audioData: ByteArray, offset: Int, length: Int): Boolean {
-        if (!isWriteMode || fileOutputStream == null) return false
+        val out = fileOutputStream ?: return false
         if (offset < 0 || length < 0 || offset + length > audioData.size) return false
         if (dataLength + length > maxDataBytes) {
             // The 32-bit WAV size fields cannot represent more data; fail loudly instead of
@@ -244,7 +239,7 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
             return false
         }
         return try {
-            fileOutputStream!!.write(audioData, offset, length)
+            out.write(audioData, offset, length)
             dataLength += length
             true
         } catch (_: IOException) {
@@ -257,9 +252,10 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
     /** On close, the write side patches header sizes back; the read side closes the stream. Returns whether closing succeeded. */
     fun close(): Boolean {
         return try {
-            if (fileOutputStream != null) {
-                fileOutputStream!!.close()
-                if (isWriteMode) updateWavHeader() else true
+            val out = fileOutputStream
+            if (out != null) {
+                out.close()
+                updateWavHeader()
             } else {
                 fileInputStream?.close()
                 true
@@ -270,8 +266,6 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
         } finally {
             fileOutputStream = null
             fileInputStream = null
-            isReadMode = false
-            isWriteMode = false
             remainingData = 0
         }
     }

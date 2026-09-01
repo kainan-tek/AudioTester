@@ -8,10 +8,6 @@ import com.example.audiotester.common.AudioConstants
 import com.example.audiotester.common.AudioEngineBase
 import com.example.audiotester.common.AudioState
 import com.example.audiotester.common.WavFile
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
@@ -32,47 +28,10 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
     private var audioRecord: AudioRecord? = null
     private var wavFile: WavFile? = null
 
-    private var recordingJob: Job? = null
-    private val recordingScope = CoroutineScope(Dispatchers.IO)
-
-    override fun doStart(): Boolean {
-        Log.d(TAG, "Starting recording")
-
-        if (state == AudioState.ACTIVE) {
-            Log.w(TAG, "Already recording")
-            engineListener?.onError("Already recording")
-            return false
-        }
-        if (state == AudioState.ERROR) {
-            state = AudioState.IDLE
-        }
-
-        return try {
-            if (!createOutputFile()) return false
-            if (!initializeAudioRecord()) return false
-
-            state = AudioState.ACTIVE
-            startRecordingLoop()
-            engineListener?.onStarted()
-
-            Log.i(TAG, "Recording started successfully")
-            true
-        } catch (e: SecurityException) {
-            handleError("${AudioConstants.ErrorTypes.PERMISSION} Recording permission denied: ${e.message}")
-            false
-        } catch (e: Exception) {
-            handleError("${AudioConstants.ErrorTypes.STREAM} Recording initialization failed: ${e.message}")
-            false
-        }
-    }
-
-    override fun cancelJob() {
-        recordingJob?.cancel()
-    }
-
-    override fun cancelScope() {
-        recordingScope.cancel()
-    }
+    override val alreadyActiveMessage = "Already recording"
+    override val permissionDeniedMessage = "Recording permission denied"
+    override val startupFailedMessage = "Recording initialization failed"
+    override val startedMessage = "Recording started successfully"
 
     override fun releaseAudioResources() {
         try {
@@ -93,7 +52,7 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
      * Output path: empty or asset:// → auto-generate a path in the app's private directory
      * (works on normal installs); otherwise use the configured path.
      */
-    private fun createOutputFile(): Boolean {
+    override fun openResources(): Boolean {
         val outputPath = currentConfig.audioFilePath
             .takeIf { it.isNotEmpty() && !it.startsWith("asset://") }
             ?: generateOutputFilePath()
@@ -126,7 +85,7 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
         }
     }
 
-    private fun initializeAudioRecord(): Boolean {
+    override fun initializeAudio(): Boolean {
         return try {
             if (!validateAudioParameters()) return false
 
@@ -191,13 +150,12 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
         }
     }
 
-    private fun startRecordingLoop() {
-        recordingJob = recordingScope.launch {
+    override fun startLoop() {
+        loopJob = loopScope.launch {
             val audioRecord = audioRecord ?: return@launch
+            val wavFile = wavFile ?: return@launch
 
-            val audioRecordBufferSize =
-                audioRecord.bufferSizeInFrames * currentConfig.channelCount * (currentConfig.audioFormat / 8)
-            val readBufferSize = audioRecordBufferSize / 3
+            val readBufferSize = audioRecord.bufferSizeInFrames * wavFile.blockAlign / 3
 
             val buffer = ByteArray(readBufferSize)
             var totalBytes = 0L
@@ -217,12 +175,12 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
                         throw IOException("AudioRecord read failed: $bytesRead")
                     }
 
-                    if (!saveFailed && wavFile?.writeAudioData(buffer, 0, bytesRead) != true) {
+                    if (!saveFailed && !wavFile.writeAudioData(buffer, 0, bytesRead)) {
                         saveFailed = true  // WavFile closes itself on failure, retrying is pointless; recording continues, data is no longer saved
                         Log.e(TAG, "File save failed - recording continues without saving")
                     }
                     totalBytes += bytesRead
-                    if (totalBytes - lastLoggedBytes >= 5 * 1024 * 1024L) {
+                    if (totalBytes - lastLoggedBytes >= PROGRESS_LOG_INTERVAL_BYTES) {
                         val mbRecorded = totalBytes / (1024.0 * 1024.0)
                         Log.v(TAG, "Progress: %.1fMB".format(Locale.US, mbRecorded))
                         lastLoggedBytes = totalBytes

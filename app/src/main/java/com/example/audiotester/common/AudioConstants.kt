@@ -88,11 +88,7 @@ object AudioConstants {
         )
     }
 
-    /** SDK usages only (contract: the return value is always safe for setUsage(), never >= 1000) */
-    fun getUsage(usage: String): Int =
-        parseEnumValue(Usage.MAP, usage, AudioAttributes.USAGE_MEDIA, "Usage")
-
-    /** Raw value resolution including system usages (>= 1000 means system usage; use resolveUsage, not getUsage, to detect it) */
+    /** Raw value resolution including system usages (>= 1000 means system usage) */
     fun resolveUsage(usage: String): Int =
         parseEnumValue(ALL_USAGE_MAP, usage, AudioAttributes.USAGE_MEDIA, "Usage")
 

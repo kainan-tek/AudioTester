@@ -80,8 +80,6 @@ abstract class AudioTestFragment : Fragment() {
     protected abstract fun formatInfo(config: AudioConfig): String
     protected abstract fun friendlyErrorMessage(raw: String): String
 
-    protected open val startButtonText: CharSequence get() = "Start"
-    protected open val stopButtonText: CharSequence get() = "Stop"
     protected open val configTitle: CharSequence get() = "Configuration"
     protected open val errorDialogTitle: CharSequence get() = "Audio Error"
 
@@ -103,8 +101,8 @@ abstract class AudioTestFragment : Fragment() {
         statusText = requireView().findViewById(R.id.statusTextView)
         infoText = requireView().findViewById(R.id.infoTextView)
         configTitleText = requireView().findViewById(R.id.configTitleTextView)
-        startButton.text = startButtonText
-        stopButton.text = stopButtonText
+        startButton.text = "Start"
+        stopButton.text = "Stop"
         configTitleText.text = configTitle
     }
 
@@ -236,7 +234,7 @@ abstract class AudioTestFragment : Fragment() {
             .setMessage(userMessage)
             // The error was already consumed and cleared by the observer (clearError);
             // closing the dialog only restores the status bar text
-            .setPositiveButton("OK") { dialog, _ -> dialog.dismiss(); statusText.text = messages.ready }
+            .setPositiveButton("OK") { dialog, _ -> dialog.cancel() }
             .setCancelable(true)
             .setOnCancelListener { statusText.text = messages.ready }
             .show()
