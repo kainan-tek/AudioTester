@@ -2,6 +2,7 @@ package com.example.audiotester.common
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -268,6 +269,53 @@ class WavFileTest {
         assertEquals(data.size.toLong(), reader.dataLength)
         assertEquals(16, reader.readData(ByteArray(16), 0, 16))
         reader.close()
+    }
+
+    @Test
+    fun openWavWithOddSizedChunk_skipsPadByte() {
+        // RIFF word alignment: an odd-sized chunk (LIST, 5 bytes) is followed by a 1-byte
+        // pad. Without consuming it, chunk scanning shifts by one byte and data is never found
+        val data = ByteArray(16) { (it + 1).toByte() }
+        val header = ByteArray(58).also { h ->
+            "RIFF".toByteArray().copyInto(h, 0)
+            h.putLeInt(4, 66)                 // riff size = fileSize - 8
+            "WAVE".toByteArray().copyInto(h, 8)
+            "fmt ".toByteArray().copyInto(h, 12)
+            h.putLeInt(16, 16)                // fmt chunk size
+            h.putLeShort(20, 1)               // PCM
+            h.putLeShort(22, 1)               // channels
+            h.putLeInt(24, 16000)             // sample rate
+            h.putLeInt(28, 32000)             // byte rate
+            h.putLeShort(32, 2)               // block align
+            h.putLeShort(34, 16)              // bits per sample
+            "LIST".toByteArray().copyInto(h, 36)
+            h.putLeInt(40, 5)                 // odd-sized chunk body
+            // h[44..48]: 5 body bytes, h[49]: pad byte (zero-initialized)
+            "data".toByteArray().copyInto(h, 50)
+            h.putLeInt(54, 16)
+        }
+        val file = File(tempFolder.root, "odd_chunk.wav")
+        file.writeBytes(header + data)
+
+        val reader = WavFile(file.absolutePath)
+        assertTrue(reader.open())
+        assertEquals(16L, reader.dataLength)
+        val buf = ByteArray(16)
+        assertEquals(16, reader.readData(buf, 0, 16))
+        assertArrayEquals(data, buf)
+        reader.close()
+    }
+
+    @Test
+    fun writeAudioData_beyondFormatLimit_failsAndCloses() {
+        // The 32-bit WAV size fields cap the data chunk; crossing the limit must fail the
+        // write loudly (recorder's saveFailed path) instead of silently corrupting the header
+        val writer = WavFile(File(tempFolder.root, "limit.wav").absolutePath, maxDataBytes = 1000L)
+        assertTrue(writer.create(8000, 2, 16))
+        assertTrue(writer.writeAudioData(ByteArray(600), 0, 600))
+        assertFalse(writer.writeAudioData(ByteArray(600), 0, 600))   // crosses the limit
+        assertFalse(writer.writeAudioData(ByteArray(10), 0, 10))     // stream closed by the guard
+        assertEquals(600L, writer.dataLength)
     }
 
     @Test

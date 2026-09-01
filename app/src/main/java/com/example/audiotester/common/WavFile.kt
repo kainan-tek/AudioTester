@@ -16,7 +16,7 @@ import java.io.RandomAccessFile
  * properties and dataLength unifies duration calculation between header-parsed (read) and
  * accumulated (write) values.
  */
-class WavFile(private val filePath: String) {
+class WavFile(private val filePath: String, private val maxDataBytes: Long = Int.MAX_VALUE - 36L) {
 
     companion object {
         private const val TAG = "WavFile"
@@ -128,6 +128,8 @@ class WavFile(private val filePath: String) {
                     }
                     else -> skip(stream, size)
                 }
+                // RIFF word alignment: an odd-sized chunk body is followed by a 1-byte pad
+                if (size % 2 != 0L) skip(stream, 1)
             }
 
             if (audioFormat != AUDIO_FORMAT_PCM) {
@@ -234,6 +236,13 @@ class WavFile(private val filePath: String) {
     fun writeAudioData(audioData: ByteArray, offset: Int, length: Int): Boolean {
         if (!isWriteMode || fileOutputStream == null) return false
         if (offset < 0 || length < 0 || offset + length > audioData.size) return false
+        if (dataLength + length > maxDataBytes) {
+            // The 32-bit WAV size fields cannot represent more data; fail loudly instead of
+            // patching a wrapped (corrupt) header at close
+            Log.e(TAG, "WAV data exceeds the format limit of $maxDataBytes bytes; aborting save")
+            close()
+            return false
+        }
         return try {
             fileOutputStream!!.write(audioData, offset, length)
             dataLength += length
