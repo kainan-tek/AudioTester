@@ -39,9 +39,6 @@ abstract class AudioTestFragment : Fragment() {
     protected lateinit var configTitleText: TextView
 
     private var isSpinnerInitialized = false
-    // "Permanently denied" detection requires at least one prior request: on first denial the
-    // rationale is not yet available, so we must not misdirect the user to settings
-    private var permissionRequestedOnce = false
 
     /**
      * Request runtime permissions via the Activity Result API (replaces the deprecated
@@ -57,9 +54,10 @@ abstract class AudioTestFragment : Fragment() {
                 statusText.text = "Permission granted"
                 return@registerForActivityResult
             }
-            val permanent = permissionRequestedOnce &&
-                    denied.any { !shouldShowRequestPermissionRationale(it) }
-            permissionRequestedOnce = true
+            // minSdk 32 (API 30+ semantics): a denial leaves the rationale showable unless the user is
+            // permanently denied (requires two denials), so rationale==false right after a denial is
+            // the permanent-deny signal itself — no "requested at least once" state is needed
+            val permanent = denied.any { !shouldShowRequestPermissionRationale(it) }
             val builder = AlertDialog.Builder(ctx)
                 .setTitle(errorDialogTitle)
                 .setMessage(
