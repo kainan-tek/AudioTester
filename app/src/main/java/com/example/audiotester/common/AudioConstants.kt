@@ -111,28 +111,26 @@ object AudioConstants {
     }
 
     private fun AudioAttributes.Builder.applyUsage(usage: Int) {
-        if (usage < SYSTEM_USAGE_START) setUsage(usage) else SystemUsageSetter(this, usage)
+        if (usage < SYSTEM_USAGE_START) setUsage(usage) else setSystemUsageReflectively(usage)
+    }
+
+    private val setSystemUsageMethod by lazy {
+        AudioAttributes.Builder::class.java
+            .getMethod("setSystemUsage", Int::class.javaPrimitiveType)
     }
 
     /** Reflectively invokes @SystemApi AudioAttributes.Builder.setSystemUsage(int) (not in the public SDK) */
-    private object SystemUsageSetter {
-        private val method by lazy {
-            AudioAttributes.Builder::class.java
-                .getMethod("setSystemUsage", Int::class.javaPrimitiveType)
-        }
-
-        operator fun invoke(builder: AudioAttributes.Builder, usage: Int) {
-            try {
-                method.invoke(builder, usage)
-            } catch (e: Throwable) {
-                // Normalize into a handleable error: hidden API interception throws NoSuchMethodError
-                // (an Error, which the engine's catch(Exception) cannot handle); normal installs /
-                // missing permission throw IAE / InvocationTargetException.
-                throw IllegalArgumentException(
-                    "setSystemUsage failed for usage $usage (requires MODIFY_AUDIO_ROUTING + system deployment)",
-                    e
-                )
-            }
+    private fun AudioAttributes.Builder.setSystemUsageReflectively(usage: Int) {
+        try {
+            setSystemUsageMethod.invoke(this, usage)
+        } catch (e: Throwable) {
+            // Normalize into a handleable error: hidden API interception throws NoSuchMethodError
+            // (an Error, which the engine's catch(Exception) cannot handle); normal installs /
+            // missing permission throw IAE / InvocationTargetException.
+            throw IllegalArgumentException(
+                "setSystemUsage failed for usage $usage (requires MODIFY_AUDIO_ROUTING + system deployment)",
+                e
+            )
         }
     }
 

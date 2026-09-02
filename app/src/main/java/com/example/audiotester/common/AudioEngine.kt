@@ -24,7 +24,6 @@ interface AudioEngine {
     fun start(): Boolean
     fun stop()
     fun release()
-    fun isActive(): Boolean
     fun setListener(listener: Listener?)
 }
 
@@ -66,8 +65,6 @@ abstract class AudioEngineBase : AudioEngine {
     override fun setListener(listener: AudioEngine.Listener?) {
         engineListener = listener
     }
-
-    override fun isActive(): Boolean = state == AudioState.ACTIVE
 
     /**
      * The single copy of the start state machine: guards → open → initialize → commit →

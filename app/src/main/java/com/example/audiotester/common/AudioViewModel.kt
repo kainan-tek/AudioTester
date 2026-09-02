@@ -59,6 +59,7 @@ class AudioViewModel(
                     _currentConfig.value = engine.setAudioConfig(defaultConfig)
                     _statusMessage.value = messages.ready
                 }
+                _errorMessage.value = null
             })
         }
     }
@@ -68,7 +69,7 @@ class AudioViewModel(
             updateUI({
                 _statusMessage.value = "Cannot reload configuration while active"
                 _errorMessage.value = "Please stop the current operation before reloading configuration"
-            }, clearError = false)
+            })
             return
         }
         viewModelScope.launch(ioDispatcher) {
@@ -86,7 +87,7 @@ class AudioViewModel(
                     _statusMessage.value = "Configuration file is empty or format error"
                     _errorMessage.value = "No valid audio configuration found"
                 }
-            }, clearError = false)
+            })
         }
     }
 
@@ -106,7 +107,7 @@ class AudioViewModel(
                         _state.value = AudioState.ERROR
                         _statusMessage.value = messages.failed
                     }
-                }, clearError = false)
+                })
             }
         }
     }
@@ -123,6 +124,7 @@ class AudioViewModel(
         updateUI({
             _currentConfig.value = engine.setAudioConfig(config)
             _statusMessage.value = "Configuration updated: ${config.description}"
+            _errorMessage.value = null
         })
     }
 
@@ -154,6 +156,7 @@ class AudioViewModel(
                         _state.value = AudioState.ACTIVE
                         _statusMessage.value = messages.active
                     }
+                    _errorMessage.value = null
                 })
             }
 
@@ -161,6 +164,7 @@ class AudioViewModel(
                 updateUI({
                     _state.value = AudioState.IDLE
                     _statusMessage.value = messages.stopped
+                    _errorMessage.value = null
                 })
             }
 
@@ -169,16 +173,13 @@ class AudioViewModel(
                     _state.value = AudioState.ERROR
                     _statusMessage.value = messages.failed
                     _errorMessage.value = error
-                }, clearError = false)
+                })
             }
         })
     }
 
-    private fun updateUI(block: () -> Unit, clearError: Boolean = true) {
-        viewModelScope.launch(Dispatchers.Main) {
-            block()
-            if (clearError) _errorMessage.value = null
-        }
+    private fun updateUI(block: () -> Unit) {
+        viewModelScope.launch(Dispatchers.Main) { block() }
     }
 
     class Factory(

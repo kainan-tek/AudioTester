@@ -56,7 +56,6 @@ class AudioViewModelTest {
         }
 
         override fun release() = stop()
-        override fun isActive(): Boolean = active
         override fun setListener(listener: AudioEngine.Listener?) { this.listener = listener }
 
         /** Separate from start(): tests interleave UI dispatch after the engine already committed */
