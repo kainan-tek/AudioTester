@@ -24,7 +24,9 @@ data class AudioConfig(
     val description: String = "Default Configuration",
 ) {
     init {
-        require(bufferMultiplier > 0) { "Buffer multiplier must be positive: $bufferMultiplier" }
+        // Upper bound: a huge multiplier would overflow minBufferSize * multiplier at start
+        // time; 100 keeps even the largest real minBufferSize far away from Int overflow
+        require(bufferMultiplier in 1..100) { "Buffer multiplier out of range 1..100: $bufferMultiplier" }
     }
 
     companion object {

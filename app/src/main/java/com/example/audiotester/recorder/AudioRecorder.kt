@@ -53,6 +53,10 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
      * (works on normal installs); otherwise use the configured path.
      */
     override fun openResources(): Boolean {
+        // Validate before touching the file system: an invalid config must not leave an
+        // orphan WAV behind
+        if (!validateAudioParameters()) return false
+
         val outputPath = currentConfig.audioFilePath
             .takeIf { it.isNotEmpty() && !it.startsWith("asset://") }
             ?: generateOutputFilePath()
@@ -87,8 +91,6 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
 
     override fun initializeAudio(): Boolean {
         return try {
-            if (!validateAudioParameters()) return false
-
             val minBufferSize = AudioRecord.getMinBufferSize(
                 currentConfig.sampleRate,
                 AudioConstants.getInputChannelMask(currentConfig.channelCount),

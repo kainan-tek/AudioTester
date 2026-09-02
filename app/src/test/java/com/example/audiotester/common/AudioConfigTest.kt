@@ -143,4 +143,22 @@ class AudioConfigTest {
         assertEquals(1, configs.size)
         assertEquals("ok", configs[0].description)
     }
+
+    @Test
+    fun oversizedBufferMultiplier_skipsEntry() {
+        // Without an upper bound a huge multiplier overflows minBufferSize * multiplier to
+        // negative at start time; rejected at parse time instead (100 accepted, 101 skipped)
+        val configs = AudioConfig.parseConfigs(
+            stream("""
+                <audioConfigs>
+                  <player>
+                    <config><bufferMultiplier>101</bufferMultiplier><description>bad</description></config>
+                    <config><bufferMultiplier>100</bufferMultiplier><description>ok</description></config>
+                  </player>
+                </audioConfigs>
+            """.trimIndent()), "player"
+        )
+        assertEquals(1, configs.size)
+        assertEquals("ok", configs[0].description)
+    }
 }

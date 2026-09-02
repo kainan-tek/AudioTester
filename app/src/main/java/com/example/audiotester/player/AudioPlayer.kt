@@ -104,7 +104,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
             val minBufferSize = AudioTrack.getMinBufferSize(wavFile.sampleRate, channelMask, audioFormat)
             Log.i(TAG, "getMinBufferSize: $minBufferSize bytes")
 
-            if (minBufferSize == AudioTrack.ERROR_BAD_VALUE) {
+            if (minBufferSize <= 0) {
                 abandonAudioFocus()
                 handleError("${AudioConstants.ErrorTypes.PARAM} Unsupported audio parameter combination: ${wavFile.sampleRate}Hz, ${wavFile.channelCount}ch, ${wavFile.bitsPerSample}bit")
                 return false
