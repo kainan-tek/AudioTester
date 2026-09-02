@@ -106,6 +106,10 @@ abstract class AudioEngineBase : AudioEngine {
     /** Subclass: launch the run loop on loopScope (assign loopJob) */
     protected abstract fun startLoop()
 
+    // Synchronized: start() reads currentConfig piecemeal (openResources → initializeAudio →
+    // startLoop); a config swap must not interleave with an in-flight start. Under the engine
+    // lock it parks until start commits, then the ACTIVE guard rejects it.
+    @Synchronized
     override fun setAudioConfig(config: AudioConfig) {
         if (state == AudioState.ACTIVE) {
             Log.w(tag, "Cannot change configuration while active")

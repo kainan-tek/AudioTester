@@ -28,6 +28,7 @@ class AudioEngineBaseTest {
         val releaseCount = AtomicInteger()
 
         val testState: AudioState get() = state
+        val testConfig: AudioConfig get() = currentConfig
 
         /** Signal so the test can pin release() to finish before start() commits (the leaking order) */
         override fun release() {
@@ -116,6 +117,45 @@ class AudioEngineBaseTest {
         assertEquals(AudioState.IDLE, engine.testState)
         assertTrue(listener.errors.isEmpty())
         assertEquals(0, engine.releaseCount.get())
+    }
+
+    @Test
+    fun setAudioConfigDuringInFlightStart_isRejected() {
+        val engine = TestEngine()
+        val startExecutor = Executors.newSingleThreadExecutor()
+        startExecutor.submit { engine.start() }
+        assertTrue(engine.enteredStart.await(5, TimeUnit.SECONDS))
+
+        // Submitted while start() holds the engine lock: without serialization it lands
+        // mid-start (openResources and initializeAudio would see different values); with the
+        // fix it parks on the lock until start commits, then is rejected by the ACTIVE guard
+        val configExecutor = Executors.newSingleThreadExecutor()
+        val configFuture =
+            configExecutor.submit { engine.setAudioConfig(AudioConfig(description = "switched")) }
+        // Give the config task a window to run: without the fix it applies immediately
+        // (mid-start); with the fix it stays parked on the engine lock the whole time
+        val appliedEarlyDeadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(500)
+        while (engine.testConfig.description != "switched" && System.nanoTime() < appliedEarlyDeadline) {
+            Thread.yield()
+        }
+
+        engine.startLatch.countDown()
+        startExecutor.shutdown()
+        assertTrue(startExecutor.awaitTermination(5, TimeUnit.SECONDS))
+        configFuture.get(5, TimeUnit.SECONDS)
+        configExecutor.shutdown()
+        assertTrue(configExecutor.awaitTermination(5, TimeUnit.SECONDS))
+
+        assertEquals("Default Configuration", engine.testConfig.description)
+    }
+
+    @Test
+    fun setAudioConfigWhenIdle_isApplied() {
+        val engine = TestEngine()
+
+        engine.setAudioConfig(AudioConfig(description = "switched"))
+
+        assertEquals("switched", engine.testConfig.description)
     }
 
     @Test

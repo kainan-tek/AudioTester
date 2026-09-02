@@ -249,13 +249,22 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
         }
     }
 
-    /** On close, the write side patches header sizes back; the read side closes the stream. Returns whether closing succeeded. */
+    /**
+     * On close, the write side patches header sizes back — except a session that produced no
+     * audio data at all: its file is deleted instead of shipping a header-only empty WAV.
+     * The read side closes the stream. Returns whether closing succeeded.
+     */
     fun close(): Boolean {
         return try {
             val out = fileOutputStream
             if (out != null) {
                 out.close()
-                updateWavHeader()
+                if (dataLength == 0L) {
+                    File(filePath).delete()
+                    true
+                } else {
+                    updateWavHeader()
+                }
             } else {
                 fileInputStream?.close()
                 true

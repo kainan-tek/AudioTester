@@ -174,6 +174,18 @@ class WavFileTest {
     }
 
     @Test
+    fun closeWriteSideWithNoData_discardsFile() {
+        // An aborted session (start failed before any audio, or stop before the first read)
+        // leaves only a header-only shell; close must delete it instead of shipping an empty WAV
+        val file = File(tempFolder.root, "empty.wav")
+        val writer = WavFile(file.absolutePath)
+        assertTrue(writer.create(48000, 2, 16))
+        assertTrue(file.exists())
+        assertTrue(writer.close())
+        assertFalse("empty WAV should be discarded, not written", file.exists())
+    }
+
+    @Test
     fun createIntoNonexistentDir_createsParents() {
         val file = File(tempFolder.root, "sub/dir/created.wav")
         val writer = WavFile(file.absolutePath)
