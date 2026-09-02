@@ -157,7 +157,10 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
             val audioRecord = audioRecord ?: return@launch
             val wavFile = wavFile ?: return@launch
 
-            val readBufferSize = audioRecord.bufferSizeInFrames * wavFile.blockAlign / 3
+            // bufferSizeInFrames / 3 keeps the read buffer a whole number of frames: a read
+            // returning a partial frame would shift every block written to the WAV into
+            // misaligned noise (the player rounds its write buffer the same way)
+            val readBufferSize = audioRecord.bufferSizeInFrames / 3 * wavFile.blockAlign
 
             val buffer = ByteArray(readBufferSize)
             var totalBytes = 0L
@@ -209,7 +212,7 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
     private fun generateOutputFilePath(): String {
         val directory = context.getExternalFilesDir(null)?.absolutePath ?: context.filesDir.absolutePath
         val dateTime = java.time.LocalDateTime.now()
-            .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+            .format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmssSSS"))
         val channelCount = currentConfig.channelCount
         val bitsPerSample = currentConfig.audioFormat
         val sampleRateK = currentConfig.sampleRate / 1000

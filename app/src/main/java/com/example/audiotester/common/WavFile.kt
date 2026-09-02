@@ -250,25 +250,16 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
     }
 
     /**
-     * On close, the write side patches header sizes back — except a session that produced no
-     * audio data at all: its file is deleted instead of shipping a header-only empty WAV.
-     * The read side closes the stream. Returns whether closing succeeded.
+     * Closes the streams, then finalizes the write side: header sizes patched back — except a
+     * session that produced no audio data at all: its file is deleted instead of shipping a
+     * header-only empty WAV. The patch runs even when the stream close itself failed (the data
+     * body is already on disk; FileOutputStream never buffers). Returns whether both succeeded.
      */
     fun close(): Boolean {
-        return try {
-            val out = fileOutputStream
-            if (out != null) {
-                out.close()
-                if (dataLength == 0L) {
-                    File(filePath).delete()
-                    true
-                } else {
-                    updateWavHeader()
-                }
-            } else {
-                fileInputStream?.close()
-                true
-            }
+        val out = fileOutputStream
+        val closed = try {
+            if (out == null) fileInputStream?.close() else out.close()
+            true
         } catch (e: IOException) {
             Log.e(TAG, "Error closing WAV file", e)
             false
@@ -277,6 +268,15 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
             fileInputStream = null
             remainingData = 0
         }
+        // Finalization runs after the streams are handled and regardless of how they ended:
+        // the delete must follow close (the handle must be gone on Windows), and the patch
+        // must not be skipped by a failed close
+        val finalized = when {
+            out == null -> true // read side: nothing to patch
+            dataLength == 0L -> { File(filePath).delete(); true }
+            else -> updateWavHeader()
+        }
+        return closed && finalized
     }
 
     // ===== Header and validation =====

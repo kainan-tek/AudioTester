@@ -56,8 +56,7 @@ class AudioViewModel(
                 _availableConfigs.value = configs
                 if (configs.isNotEmpty()) {
                     val defaultConfig = configs[0]
-                    engine.setAudioConfig(defaultConfig)
-                    _currentConfig.value = defaultConfig
+                    _currentConfig.value = engine.setAudioConfig(defaultConfig)
                     _statusMessage.value = messages.ready
                 }
             })
@@ -65,7 +64,7 @@ class AudioViewModel(
     }
 
     fun reloadConfigurations(previousPosition: Int) {
-        if (_state.value == AudioState.ACTIVE) {
+        if (_state.value == AudioState.ACTIVE || _state.value == AudioState.STARTING) {
             updateUI({
                 _statusMessage.value = "Cannot reload configuration while active"
                 _errorMessage.value = "Please stop the current operation before reloading configuration"
@@ -81,8 +80,7 @@ class AudioViewModel(
                     // Restore by selected position rather than description: descriptions may be
                     // duplicated (custom /data configs); position naturally matches the UI selection
                     val newConfig = configs.getOrNull(previousPosition) ?: configs[0]
-                    engine.setAudioConfig(newConfig)
-                    _currentConfig.value = newConfig
+                    _currentConfig.value = engine.setAudioConfig(newConfig)
                     _statusMessage.value = "Configuration reloaded successfully: ${configs.size} configs"
                 } else {
                     _statusMessage.value = "Configuration file is empty or format error"
@@ -94,10 +92,10 @@ class AudioViewModel(
 
     /** Must be called on the main thread (writes LiveData directly) */
     fun start() {
-        if (_state.value == AudioState.ACTIVE) return
+        if (_state.value == AudioState.ACTIVE || _state.value == AudioState.STARTING) return
         stopRequested = false
         _errorMessage.value = null
-        if (_state.value == AudioState.ERROR) _state.value = AudioState.IDLE
+        _state.value = AudioState.STARTING
         _statusMessage.value = messages.preparing
 
         viewModelScope.launch(ioDispatcher) {
@@ -122,9 +120,8 @@ class AudioViewModel(
     }
 
     fun setAudioConfig(config: AudioConfig) {
-        engine.setAudioConfig(config)
         updateUI({
-            _currentConfig.value = config
+            _currentConfig.value = engine.setAudioConfig(config)
             _statusMessage.value = "Configuration updated: ${config.description}"
         })
     }

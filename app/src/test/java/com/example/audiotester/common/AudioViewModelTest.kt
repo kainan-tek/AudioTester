@@ -31,7 +31,14 @@ class AudioViewModelTest {
         private var active = false
         private var listener: AudioEngine.Listener? = null
 
-        override fun setAudioConfig(config: AudioConfig) {}
+        var currentConfig: AudioConfig = AudioConfig()
+            private set
+
+        // Mirrors the real engine contract: reject while ACTIVE, return the effective config
+        override fun setAudioConfig(config: AudioConfig): AudioConfig {
+            if (!active) currentConfig = config
+            return currentConfig
+        }
         override fun start(): Boolean {
             if (active) {
                 listener?.onError("Already playing")
@@ -86,7 +93,7 @@ class AudioViewModelTest {
     fun `stop during startup is not swallowed`() = runTest(testDispatcher.scheduler) {
         viewModel.start()
         advanceUntilIdle()      // engine committed; the IO-side stopRequested check already ran
-        viewModel.stop()        // lands while _state is still IDLE: only sets the flag
+        viewModel.stop()        // lands while _state is still STARTING: only sets the flag
         engine.fireOnStarted()  // onStarted reaches the UI after the stop request
 
         advanceUntilIdle()
@@ -112,11 +119,52 @@ class AudioViewModelTest {
     fun `start without stop becomes active`() = runTest(testDispatcher.scheduler) {
         viewModel.start()
         advanceUntilIdle()
+        assertEquals(AudioState.STARTING, viewModel.state.value)   // startup window: not yet committed
         engine.fireOnStarted()
 
         advanceUntilIdle()
 
         assertEquals(AudioState.ACTIVE, viewModel.state.value)
         assertFalse(engine.stopCalled)
+    }
+
+    /** Rejected-while-ACTIVE config changes must never leak into the UI: the write point echoes the engine truth */
+    @Test
+    fun `config change while engine commits is rejected and converges`() = runTest(testDispatcher.scheduler) {
+        val applied = AudioConfig(description = "applied")
+        val rejected = AudioConfig(description = "rejected")
+
+        viewModel.setAudioConfig(applied)
+        advanceUntilIdle()
+        viewModel.start()
+        advanceUntilIdle()      // engine committed; onStarted not yet dispatched
+
+        viewModel.setAudioConfig(rejected)
+        advanceUntilIdle()
+
+        assertEquals(applied, viewModel.currentConfig.value)
+        assertEquals(applied, engine.currentConfig)
+    }
+
+    /** Stop during the startup window must not leave the UI holding a config the engine rejected */
+    @Test
+    fun `stop during startup leaves config consistent with engine`() = runTest(testDispatcher.scheduler) {
+        val applied = AudioConfig(description = "applied")
+        val rejected = AudioConfig(description = "rejected")
+
+        viewModel.setAudioConfig(applied)
+        advanceUntilIdle()
+        viewModel.start()
+        advanceUntilIdle()
+        viewModel.stop()        // startup window: only sets the flag
+        viewModel.setAudioConfig(rejected)
+        advanceUntilIdle()
+        engine.fireOnStarted()  // stopRequested branch stops the engine
+
+        advanceUntilIdle()
+
+        assertEquals(AudioState.IDLE, viewModel.state.value)
+        assertEquals(applied, viewModel.currentConfig.value)
+        assertEquals(applied, engine.currentConfig)
     }
 }

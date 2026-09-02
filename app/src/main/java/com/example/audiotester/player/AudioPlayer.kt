@@ -204,14 +204,15 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
      * The UI has no pause support, so every focus loss is turned into a stop
      */
     private fun handleFocusChange(focusChange: Int) {
-        if (focusChange in listOf(
-                AudioManager.AUDIOFOCUS_LOSS,
-                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
-                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK
-            )
-        ) {
-            Log.d(TAG, "Audio focus lost (type: $focusChange), stopping playback")
-            stop()
+        when (focusChange) {
+            AudioManager.AUDIOFOCUS_LOSS,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                Log.d(TAG, "Audio focus lost (type: $focusChange), stopping playback")
+                // Focus callbacks land on the main thread; stop() takes the engine lock and
+                // closes the WAV (disk IO) — post it off-main to keep the callback cheap
+                loopScope.launch { stop() }
+            }
         }
     }
 

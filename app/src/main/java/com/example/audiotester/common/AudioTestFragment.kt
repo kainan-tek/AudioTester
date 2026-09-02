@@ -213,6 +213,11 @@ abstract class AudioTestFragment : Fragment() {
                 stopButton.isEnabled = false
                 configSpinner.isEnabled = true
             }
+            AudioState.STARTING -> {
+                startButton.isEnabled = false
+                stopButton.isEnabled = false
+                configSpinner.isEnabled = false
+            }
             AudioState.ACTIVE -> {
                 startButton.isEnabled = false
                 stopButton.isEnabled = true

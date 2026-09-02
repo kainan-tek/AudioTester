@@ -18,7 +18,9 @@ interface AudioEngine {
         fun onError(error: String)
     }
 
-    fun setAudioConfig(config: AudioConfig)
+    /** Applies the config and returns what the engine will actually use: the argument itself
+     *  if accepted, the previously applied config if rejected while ACTIVE */
+    fun setAudioConfig(config: AudioConfig): AudioConfig
     fun start(): Boolean
     fun stop()
     fun release()
@@ -26,8 +28,12 @@ interface AudioEngine {
     fun setListener(listener: Listener?)
 }
 
-/** Unified audio state enum (former PlayerState / RecorderState had identical structure, merged) */
-enum class AudioState { IDLE, ACTIVE, ERROR }
+/**
+ * Unified audio state enum (former PlayerState / RecorderState had identical structure, merged).
+ * STARTING is ViewModel-side only: start requested but not yet committed (the engine jumps
+ * IDLE → ACTIVE synchronously under its lock and never reports it).
+ */
+enum class AudioState { IDLE, STARTING, ACTIVE, ERROR }
 
 /**
  * Common scaffolding for AudioEngine: the full start/stop/release state machine lives here,
@@ -110,13 +116,14 @@ abstract class AudioEngineBase : AudioEngine {
     // startLoop); a config swap must not interleave with an in-flight start. Under the engine
     // lock it parks until start commits, then the ACTIVE guard rejects it.
     @Synchronized
-    override fun setAudioConfig(config: AudioConfig) {
+    override fun setAudioConfig(config: AudioConfig): AudioConfig {
         if (state == AudioState.ACTIVE) {
             Log.w(tag, "Cannot change configuration while active")
-            return
+            return currentConfig
         }
         currentConfig = config
         Log.i(tag, "Configuration updated: ${config.description}")
+        return currentConfig
     }
 
     @Synchronized
