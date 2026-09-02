@@ -30,8 +30,9 @@ interface AudioEngine {
 enum class AudioState { IDLE, ACTIVE, ERROR }
 
 /**
- * Common scaffolding for AudioEngine: state/listener/start-stop/release/error handling centralized in one place.
- * The player and recorder keep only their truly different parts (audio object initialization, run loop, start skeleton).
+ * Common scaffolding for AudioEngine: the full start/stop/release state machine lives here,
+ * under one engine lock. The player and recorder keep only their truly different parts
+ * (resource opening, audio object initialization, run loop, message texts).
  */
 abstract class AudioEngineBase : AudioEngine {
 
@@ -68,6 +69,7 @@ abstract class AudioEngineBase : AudioEngine {
      */
     @Synchronized
     final override fun start(): Boolean {
+        Log.d(tag, "Starting")
         if (released) {
             Log.w(tag, "Ignoring start: engine is released")
             return false
