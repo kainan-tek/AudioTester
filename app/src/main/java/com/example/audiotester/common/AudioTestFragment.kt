@@ -151,11 +151,8 @@ abstract class AudioTestFragment : Fragment() {
                 requestPermission()
                 return@setOnClickListener
             }
-            // Disable Start during the startup window to prevent double clicks
-            // (double start / "Already playing" → ERROR trap);
-            // button states are restored by the state observer once the engine commits
-            startButton.isEnabled = false
-            stopButton.isEnabled = true
+            // Double clicks are fenced by the STARTING layout (both buttons disabled, set
+            // synchronously by the state observer when start() enters STARTING)
             viewModel.start()
         }
         stopButton.setOnClickListener { viewModel.stop() }
@@ -207,7 +204,7 @@ abstract class AudioTestFragment : Fragment() {
 
     private fun updateButtonStates(state: AudioState) {
         when (state) {
-            AudioState.IDLE -> {
+            AudioState.IDLE, AudioState.ERROR -> {
                 startButton.isEnabled = true
                 stopButton.isEnabled = false
                 configSpinner.isEnabled = true
@@ -221,11 +218,6 @@ abstract class AudioTestFragment : Fragment() {
                 startButton.isEnabled = false
                 stopButton.isEnabled = true
                 configSpinner.isEnabled = false
-            }
-            AudioState.ERROR -> {
-                startButton.isEnabled = true
-                stopButton.isEnabled = false
-                configSpinner.isEnabled = true
             }
         }
     }
@@ -243,7 +235,6 @@ abstract class AudioTestFragment : Fragment() {
             .setOnCancelListener { statusText.text = messages.ready }
             .show()
         statusText.text = "Error: $userMessage"
-        updateButtonStates(AudioState.ERROR)
     }
 
     private fun reloadConfigurations() {

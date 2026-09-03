@@ -162,9 +162,15 @@ class AudioViewModel(
 
             override fun onStopped() {
                 updateUI {
-                    _state.value = AudioState.IDLE
-                    _statusMessage.value = messages.stopped
-                    _errorMessage.value = null
+                    // An error reported during release (e.g. WAV finalization failed) is queued
+                    // ahead of this confirmation. Active observers consume it immediately
+                    // (dialog + clearError); inactive ones (stop while backgrounded) rely on
+                    // this guard so the error survives until it is delivered
+                    if (_state.value != AudioState.ERROR) {
+                        _state.value = AudioState.IDLE
+                        _statusMessage.value = messages.stopped
+                        _errorMessage.value = null
+                    }
                 }
             }
 

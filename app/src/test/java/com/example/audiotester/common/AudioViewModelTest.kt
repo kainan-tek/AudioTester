@@ -28,6 +28,8 @@ class AudioViewModelTest {
     /** Mirrors the real engine contract: stop() is a no-op when idle; start() commits before returning */
     private class FakeEngine : AudioEngine {
         var stopCalled = false
+        /** Mirrors the recorder's finalize failure: the error is reported during stop(), before the onStopped confirmation */
+        var failRelease = false
         private var active = false
         private var listener: AudioEngine.Listener? = null
 
@@ -52,6 +54,7 @@ class AudioViewModelTest {
             if (!active) return
             active = false
             stopCalled = true
+            if (failRelease) listener?.onError("[FINALIZE] test failure")
             listener?.onStopped()
         }
 
@@ -143,6 +146,22 @@ class AudioViewModelTest {
 
         assertEquals(applied, viewModel.currentConfig.value)
         assertEquals(applied, engine.currentConfig)
+    }
+
+    /** A release-time error (e.g. WAV finalization failed) must survive the stop confirmation until the UI observer consumes it */
+    @Test
+    fun `error during stop is not cleared by the stopped confirmation`() = runTest(testDispatcher.scheduler) {
+        engine.failRelease = true
+        viewModel.start()
+        advanceUntilIdle()
+        engine.fireOnStarted()
+        advanceUntilIdle()
+        viewModel.stop()
+
+        advanceUntilIdle()
+
+        assertEquals(AudioState.ERROR, viewModel.state.value)
+        assertEquals("[FINALIZE] test failure", viewModel.errorMessage.value)
     }
 
     /** Stop during the startup window must not leave the UI holding a config the engine rejected */
