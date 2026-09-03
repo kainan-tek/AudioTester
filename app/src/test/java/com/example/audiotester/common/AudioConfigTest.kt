@@ -128,7 +128,7 @@ class AudioConfigTest {
 
     @Test
     fun invalidBufferMultiplier_skipsOnlyThatEntry() {
-        // require(bufferMultiplier > 0) throws → runCatching skips only that entry,
+        // require(bufferMultiplier in 1..100) throws → runCatching skips only that entry,
         // without taking down the whole section
         val configs = AudioConfig.parseConfigs(
             stream("""
