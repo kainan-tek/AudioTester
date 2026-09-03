@@ -92,6 +92,7 @@ abstract class AudioTestFragment : Fragment() {
         setupClickListeners()
     }
 
+    @SuppressLint("SetTextI18n")
     private fun initViews() {
         startButton = requireView().findViewById(R.id.startButton)
         stopButton = requireView().findViewById(R.id.stopButton)

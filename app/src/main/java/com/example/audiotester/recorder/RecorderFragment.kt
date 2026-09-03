@@ -2,7 +2,6 @@ package com.example.audiotester.recorder
 
 import android.Manifest
 import android.content.Context
-import android.os.Build
 import com.example.audiotester.common.AudioConfig
 import com.example.audiotester.common.AudioEngine
 import com.example.audiotester.common.AudioMessages
@@ -23,12 +22,9 @@ class RecorderFragment : AudioTestFragment() {
 
     override fun createEngine(context: Context): AudioEngine = AudioRecorder(context)
 
-    // minSdk=32 (Android 12L): no need to handle WRITE_EXTERNAL_STORAGE for P and below
-    override fun requiredPermissions(): Array<String> = when {
-        Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2 ->
-            arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.READ_EXTERNAL_STORAGE)
-        else -> arrayOf(Manifest.permission.RECORD_AUDIO)
-    }
+    // Recording only ever writes to app-scoped dirs (getExternalFilesDir / filesDir) — no
+    // storage permission is needed on any supported API level; RECORD_AUDIO is the sole gate
+    override fun requiredPermissions(): Array<String> = arrayOf(Manifest.permission.RECORD_AUDIO)
 
     override fun formatInfo(config: AudioConfig): String {
         val filePathDisplay = config.audioFilePath.ifBlank {

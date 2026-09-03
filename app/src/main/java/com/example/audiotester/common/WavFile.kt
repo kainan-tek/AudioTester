@@ -76,8 +76,8 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
                 Log.e(TAG, "Cannot read WAV RIFF header")
                 return false
             }
-            if (String(riff, RIFF_OFFSET, 4) != "RIFF" ||
-                String(riff, WAVE_OFFSET, 4) != "WAVE"
+            if (String(riff, RIFF_OFFSET, 4, Charsets.US_ASCII) != "RIFF" ||
+                String(riff, WAVE_OFFSET, 4, Charsets.US_ASCII) != "WAVE"
             ) {
                 Log.e(TAG, "Not a valid WAV file")
                 return false
@@ -93,7 +93,7 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
                 }
                 // chunk size: header[4..7] (4 bytes little-endian, unsigned; mask restores the unsigned value)
                 val size = readLittleEndianInt(header, 4).toLong() and 0xFFFFFFFFL
-                when (String(header, 0, 4)) {
+                when (String(header, 0, 4, Charsets.US_ASCII)) {
                     "fmt " -> {
                         // 40 bytes cover EXTENSIBLE's cbSize/validBits/channelMask/subformat (first 2 bytes of the GUID)
                         val fmtLen = minOf(size, 40L).toInt()
@@ -343,6 +343,9 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
     private fun readLittleEndianShort(bytes: ByteArray, offset: Int): Int =
         (bytes[offset].toInt() and 0xFF) or ((bytes[offset + 1].toInt() and 0xFF) shl 8)
 
+    // offset keeps the LE-helper family's signature uniform (the short/write variants all take it,
+    // with varied offsets); both current call sites read offset 4 (RIFF size, fmt sampleRate)
+    @Suppress("SameParameterValue")
     private fun readLittleEndianInt(bytes: ByteArray, offset: Int): Int =
         (bytes[offset].toInt() and 0xFF) or
             ((bytes[offset + 1].toInt() and 0xFF) shl 8) or

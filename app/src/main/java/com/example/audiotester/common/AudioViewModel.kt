@@ -52,7 +52,7 @@ class AudioViewModel(
     private fun loadConfigurations() {
         viewModelScope.launch(ioDispatcher) {
             val configs = AudioConfig.loadConfigs(getApplication(), section)
-            updateUI({
+            updateUI {
                 _availableConfigs.value = configs
                 if (configs.isNotEmpty()) {
                     val defaultConfig = configs[0]
@@ -60,22 +60,22 @@ class AudioViewModel(
                     _statusMessage.value = messages.ready
                 }
                 _errorMessage.value = null
-            })
+            }
         }
     }
 
     fun reloadConfigurations(previousPosition: Int) {
         if (_state.value == AudioState.ACTIVE || _state.value == AudioState.STARTING) {
-            updateUI({
+            updateUI {
                 _statusMessage.value = "Cannot reload configuration while active"
                 _errorMessage.value = "Please stop the current operation before reloading configuration"
-            })
+            }
             return
         }
         viewModelScope.launch(ioDispatcher) {
             // loadConfigs already catches all exceptions internally (failures fall back to emergency defaults); no extra try needed here
             val configs = AudioConfig.loadConfigs(getApplication(), section)
-            updateUI({
+            updateUI {
                 if (configs.isNotEmpty()) {
                     _availableConfigs.value = configs
                     // Restore by selected position rather than description: descriptions may be
@@ -87,7 +87,7 @@ class AudioViewModel(
                     _statusMessage.value = "Configuration file is empty or format error"
                     _errorMessage.value = "No valid audio configuration found"
                 }
-            })
+            }
         }
     }
 
@@ -102,12 +102,12 @@ class AudioViewModel(
         viewModelScope.launch(ioDispatcher) {
             val success = engine.start()
             if (!success) {
-                updateUI({
+                updateUI {
                     if (_state.value != AudioState.ERROR) {
                         _state.value = AudioState.ERROR
                         _statusMessage.value = messages.failed
                     }
-                })
+                }
             }
         }
     }
@@ -121,11 +121,11 @@ class AudioViewModel(
     }
 
     fun setAudioConfig(config: AudioConfig) {
-        updateUI({
+        updateUI {
             _currentConfig.value = engine.setAudioConfig(config)
             _statusMessage.value = "Configuration updated: ${config.description}"
             _errorMessage.value = null
-        })
+        }
     }
 
     fun getAllAudioConfigs(): List<AudioConfig> = _availableConfigs.value ?: emptyList()
@@ -146,7 +146,7 @@ class AudioViewModel(
     private fun setupEngineListener() {
         engine.setListener(object : AudioEngine.Listener {
             override fun onStarted() {
-                updateUI({
+                updateUI {
                     if (stopRequested) {
                         // stop() landed during the startup window: _state was still IDLE so only
                         // the flag was set. The engine has committed by now — stop it for real;
@@ -157,23 +157,23 @@ class AudioViewModel(
                         _statusMessage.value = messages.active
                     }
                     _errorMessage.value = null
-                })
+                }
             }
 
             override fun onStopped() {
-                updateUI({
+                updateUI {
                     _state.value = AudioState.IDLE
                     _statusMessage.value = messages.stopped
                     _errorMessage.value = null
-                })
+                }
             }
 
             override fun onError(error: String) {
-                updateUI({
+                updateUI {
                     _state.value = AudioState.ERROR
                     _statusMessage.value = messages.failed
                     _errorMessage.value = error
-                })
+                }
             }
         })
     }

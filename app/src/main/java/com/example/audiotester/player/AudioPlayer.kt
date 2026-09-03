@@ -1,6 +1,7 @@
 package com.example.audiotester.player
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -16,6 +17,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.IOException
 import java.util.Locale
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Audio player based on the AudioTrack API.
@@ -61,26 +63,27 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
      */
     override fun openResources(): Boolean {
         val path = currentConfig.audioFilePath.ifEmpty { AudioConstants.DEFAULT_AUDIO_FILE }
-        wavFile = WavFile(path)
+        val wavFile = WavFile(path)
+        this.wavFile = wavFile
         val opened = if (path.startsWith("asset://")) {
             try {
-                wavFile!!.open(context.assets.open(path.removePrefix("asset://")))
+                wavFile.open(context.assets.open(path.removePrefix("asset://")))
             } catch (_: IOException) {
                 handleError("${AudioConstants.ErrorTypes.FILE} Cannot open audio asset: $path")
                 return false
             }
         } else {
-            wavFile!!.open()
+            wavFile.open()
         }
 
-        if (!opened || !wavFile!!.isValid()) {
+        if (!opened || !wavFile.isValid()) {
             handleError("${AudioConstants.ErrorTypes.FILE} Cannot open audio file: $path")
             return false
         }
 
         Log.d(
             TAG,
-            "Audio file opened: ${wavFile!!.sampleRate}Hz, ${wavFile!!.bitsPerSample}bit, ${wavFile!!.channelCount}ch"
+            "Audio file opened: ${wavFile.sampleRate}Hz, ${wavFile.bitsPerSample}bit, ${wavFile.channelCount}ch"
         )
         return true
     }
@@ -88,16 +91,19 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
     override fun initializeAudio(): Boolean {
         val wavFile = wavFile ?: return false
 
+        // Every failure path funnels through handleError → releaseAudioResources, which already
+        // abandons focus and releases the track; no per-path cleanup here
         try {
-            if (!requestAudioFocus()) {
+            // Built once and shared by the focus request below and the track creation
+            val audioAttributes =
+                AudioConstants.buildAudioAttributes(currentConfig.usage, currentConfig.contentType)
+
+            if (!requestAudioFocus(audioAttributes)) {
                 handleError("${AudioConstants.ErrorTypes.FOCUS} Cannot obtain audio focus")
                 return false
             }
 
-            if (!validateAudioParameters(wavFile)) {
-                abandonAudioFocus()
-                return false
-            }
+            if (!validateAudioParameters(wavFile)) return false
 
             val channelMask = AudioConstants.getOutputChannelMask(wavFile.channelCount)
             val audioFormat = AudioConstants.getFormatFromBitDepth(wavFile.bitsPerSample)
@@ -105,15 +111,11 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
             Log.i(TAG, "getMinBufferSize: $minBufferSize bytes")
 
             if (minBufferSize <= 0) {
-                abandonAudioFocus()
                 handleError("${AudioConstants.ErrorTypes.PARAM} Unsupported audio parameter combination: ${wavFile.sampleRate}Hz, ${wavFile.channelCount}ch, ${wavFile.bitsPerSample}bit")
                 return false
             }
 
             val bufferSize = minBufferSize * currentConfig.bufferMultiplier
-
-            val audioAttributes =
-                AudioConstants.buildAudioAttributes(currentConfig.usage, currentConfig.contentType)
 
             audioTrack = AudioTrack.Builder().setAudioAttributes(audioAttributes).setAudioFormat(
                 AudioFormat.Builder().setSampleRate(wavFile.sampleRate).setChannelMask(channelMask)
@@ -124,7 +126,6 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                 .build()
 
             if (audioTrack?.state != AudioTrack.STATE_INITIALIZED) {
-                abandonAudioFocus()
                 handleError("${AudioConstants.ErrorTypes.STREAM} AudioTrack initialization failed, state: ${audioTrack?.state}")
                 return false
             }
@@ -144,7 +145,6 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
 
             return true
         } catch (e: Exception) {
-            abandonAudioFocus()
             handleError("${AudioConstants.ErrorTypes.STREAM} AudioTrack creation failed: ${e.message}")
             return false
         }
@@ -162,22 +162,19 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
         return true
     }
 
-    private fun requestAudioFocus(): Boolean {
+    private fun requestAudioFocus(audioAttributes: AudioAttributes): Boolean {
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
         // System usages (>= 1000) are vehicle-critical audio and do not rely on regular focus
         // management, so skip the focus request.
         // (SDK usages are always < 1000; this check only affects Usage.SYSTEM_MAP configs)
-        if (AudioConstants.resolveUsage(currentConfig.usage) >= 1000) return true
+        if (AudioConstants.isSystemUsage(currentConfig.usage)) return true
 
         val focusType = determineFocusType()
 
         val focusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
             handleFocusChange(focusChange)
         }
-
-        val audioAttributes =
-            AudioConstants.buildAudioAttributes(currentConfig.usage, currentConfig.contentType)
 
         val request = AudioFocusRequest.Builder(focusType).setAudioAttributes(audioAttributes)
             .setOnAudioFocusChangeListener(focusChangeListener).setWillPauseWhenDucked(false)
@@ -300,7 +297,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                         while (isActive && state == AudioState.ACTIVE &&
                             audioTrack.playbackHeadPosition < framesWritten &&
                             SystemClock.elapsedRealtime() < deadline) {
-                            delay(10)
+                            delay(10.milliseconds)
                         }
                     }
                     val mbTotal = totalBytes / (1024.0 * 1024.0)

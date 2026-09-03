@@ -92,6 +92,9 @@ object AudioConstants {
     fun resolveUsage(usage: String): Int =
         parseEnumValue(ALL_USAGE_MAP, usage, AudioAttributes.USAGE_MEDIA, "Usage")
 
+    /** True for system usages (1000-1004): vehicle-only, need MODIFY_AUDIO_ROUTING + system deployment */
+    fun isSystemUsage(usage: String): Boolean = resolveUsage(usage) >= SYSTEM_USAGE_START
+
     /** System usage start value (matches @hide AudioAttributes.SYSTEM_USAGE_OFFSET) */
     private const val SYSTEM_USAGE_START = 1000
 

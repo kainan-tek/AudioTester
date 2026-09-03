@@ -62,11 +62,12 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
             ?: generateOutputFilePath()
 
         return try {
-            wavFile = WavFile(outputPath)
+            val wavFile = WavFile(outputPath)
+            this.wavFile = wavFile
             val channelCount = currentConfig.channelCount
             val bitsPerSample = currentConfig.audioFormat
 
-            if (wavFile!!.create(currentConfig.sampleRate, channelCount, bitsPerSample)) {
+            if (wavFile.create(currentConfig.sampleRate, channelCount, bitsPerSample)) {
                 Log.d(TAG, "Output file created: $outputPath (${channelCount} channels)")
                 true
             } else {
