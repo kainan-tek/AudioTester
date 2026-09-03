@@ -39,6 +39,8 @@ class RecorderFragment : AudioTestFragment() {
     override fun friendlyErrorMessage(raw: String): String = when {
         raw.startsWith("[FILE]", ignoreCase = true) ->
             "Unable to create recording file. Please check storage permissions and available space."
+        raw.startsWith("[FINALIZE]", ignoreCase = true) ->
+            "Recording data was saved but the file could not be finalized. The file may be unreadable. Please check storage."
         raw.startsWith("[STREAM]", ignoreCase = true) ->
             "Audio system initialization failed. Please try again."
         raw.startsWith("[PERMISSION]", ignoreCase = true) ->

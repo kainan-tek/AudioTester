@@ -41,27 +41,40 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
     override val startedMessage = "Playback started successfully"
 
     override fun releaseAudioResources() {
+        // Independent steps: one failing release must not strand the resources after it.
+        // WavFile.close() never throws (all IO errors are reported via its return value).
         try {
             audioTrack?.apply {
                 if (this.state == AudioTrack.STATE_INITIALIZED) stop()
                 release()
             }
-            audioTrack = null
-
-            abandonAudioFocus()
-            audioManager = null
-
-            wavFile?.close()
-            wavFile = null
         } catch (e: Exception) {
-            Log.e(TAG, "Error releasing resources", e)
+            Log.e(TAG, "Error releasing AudioTrack", e)
         }
+        audioTrack = null
+
+        try {
+            abandonAudioFocus()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error abandoning audio focus", e)
+        }
+        audioManager = null
+
+        wavFile?.close()
+        wavFile = null
     }
 
     /**
      * Opens the audio file. Empty path → built-in source; asset:// prefix → assets; otherwise → regular file.
      */
     override fun openResources(): Boolean {
+        // Reject unknown enum strings before opening anything: the parse-time fallback would
+        // silently play with the default constants while the test looks successful
+        AudioConstants.findUnknownPlayerEnum(currentConfig.usage, currentConfig.contentType, currentConfig.performanceMode)?.let {
+            handleError("${AudioConstants.ErrorTypes.PARAM} Unknown $it")
+            return false
+        }
+
         val path = currentConfig.audioFilePath.ifEmpty { AudioConstants.DEFAULT_AUDIO_FILE }
         val wavFile = WavFile(path)
         this.wavFile = wavFile

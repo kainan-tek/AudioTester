@@ -24,6 +24,7 @@ object AudioConstants {
         const val PERMISSION = "[PERMISSION]"
         const val PARAM = "[PARAM]"
         const val FOCUS = "[FOCUS]"
+        const val FINALIZE = "[FINALIZE]"
     }
 
     // ===== Player domain =====
@@ -90,10 +91,18 @@ object AudioConstants {
 
     /** Raw value resolution including system usages (>= 1000 means system usage) */
     fun resolveUsage(usage: String): Int =
-        parseEnumValue(ALL_USAGE_MAP, usage, AudioAttributes.USAGE_MEDIA, "Usage")
+        parseEnumValue(ALL_USAGE_MAP, usage, "Usage")
 
     /** True for system usages (1000-1004): vehicle-only, need MODIFY_AUDIO_ROUTING + system deployment */
     fun isSystemUsage(usage: String): Boolean = resolveUsage(usage) >= SYSTEM_USAGE_START
+
+    /** First unknown player-domain enum string ("usage: XXX"), or null if all resolve — a fallback would silently test the wrong attributes */
+    fun findUnknownPlayerEnum(usage: String, contentType: String, performanceMode: String): String? = when {
+        usage !in ALL_USAGE_MAP -> "usage: $usage"
+        contentType !in ContentType.MAP -> "contentType: $contentType"
+        performanceMode !in PerformanceMode.MAP -> "performanceMode: $performanceMode"
+        else -> null
+    }
 
     /** System usage start value (matches @hide AudioAttributes.SYSTEM_USAGE_OFFSET) */
     private const val SYSTEM_USAGE_START = 1000
@@ -138,11 +147,11 @@ object AudioConstants {
     }
 
     fun getContentType(contentType: String): Int = parseEnumValue(
-        ContentType.MAP, contentType, AudioAttributes.CONTENT_TYPE_MUSIC, "ContentType"
+        ContentType.MAP, contentType, "ContentType"
     )
 
     fun getPerformanceMode(performanceMode: String): Int = parseEnumValue(
-        PerformanceMode.MAP, performanceMode, AudioTrack.PERFORMANCE_MODE_POWER_SAVING, "PerformanceMode"
+        PerformanceMode.MAP, performanceMode, "PerformanceMode"
     )
 
     // ===== Recorder domain =====
@@ -169,23 +178,20 @@ object AudioConstants {
     }
 
     fun getAudioSource(audioSource: String): Int =
-        parseEnumValue(AudioSource.MAP, audioSource, MediaRecorder.AudioSource.MIC, "AudioSource")
+        parseEnumValue(AudioSource.MAP, audioSource, "AudioSource")
+
+    /** Unknown recorder-domain enum string ("audioSource: XXX"), or null — same contract as [findUnknownPlayerEnum] */
+    fun findUnknownRecorderEnum(audioSource: String): String? =
+        if (audioSource in AudioSource.MAP) null else "audioSource: $audioSource"
 
     // ===== Shared helpers =====
 
+    /** Callers pre-validate via findUnknown*: this fails loudly instead of silently substituting a default constant */
     private fun parseEnumValue(
         map: Map<String, Int>,
         value: String,
-        default: Int,
-        typeName: String = "",
-    ): Int {
-        val result = map[value]
-        if (result != null) return result
-        if (value.isNotEmpty()) {
-            android.util.Log.w("AudioConstants", "Unknown $typeName value: $value, using default: $default")
-        }
-        return default
-    }
+        typeName: String,
+    ): Int = requireNotNull(map[value]) { "Unknown $typeName value: $value" }
 
     /** Bit depth → AudioFormat encoding; the valid bit-depth set shares this source (isValidBitDepth derives from it) */
     private val BIT_DEPTH_FORMATS = mapOf(

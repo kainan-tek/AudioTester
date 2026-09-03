@@ -34,18 +34,26 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
     override val startedMessage = "Recording started successfully"
 
     override fun releaseAudioResources() {
+        // Independent steps: one failing release must not strand the resources after it.
+        // WavFile.close() never throws (all IO errors are reported via its return value).
         try {
             audioRecord?.apply {
                 if (this.state == AudioRecord.STATE_INITIALIZED) stop()
                 release()
             }
-            audioRecord = null
-
-            wavFile?.close()
-            wavFile = null
         } catch (e: Exception) {
-            Log.e(TAG, "Error releasing resources", e)
+            Log.e(TAG, "Error releasing AudioRecord", e)
         }
+        audioRecord = null
+
+        wavFile?.let {
+            // A failed header patch leaves data on disk behind a placeholder header — an
+            // unreadable file. Surface it: silence here would report a broken save as success
+            if (!it.close()) {
+                engineListener?.onError("${AudioConstants.ErrorTypes.FINALIZE} Failed to finalize the recording file (data is saved but the header is incomplete)")
+            }
+        }
+        wavFile = null
     }
 
     /**
@@ -53,6 +61,13 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
      * (works on normal installs); otherwise use the configured path.
      */
     override fun openResources(): Boolean {
+        // Reject unknown enum strings before touching the file system: the parse-time fallback
+        // would silently record with the default source while the test looks successful
+        AudioConstants.findUnknownRecorderEnum(currentConfig.audioSource)?.let {
+            handleError("${AudioConstants.ErrorTypes.PARAM} Unknown $it")
+            return false
+        }
+
         // Validate before touching the file system: an invalid config must not leave an
         // orphan WAV behind
         if (!validateAudioParameters()) return false
