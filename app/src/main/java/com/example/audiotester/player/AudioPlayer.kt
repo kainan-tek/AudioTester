@@ -305,10 +305,10 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                     }
                     val mbTotal = totalBytes / (1024.0 * 1024.0)
                     Log.i(TAG, "Playback completed: %.1fMB".format(Locale.US, mbTotal))
-                    stop()
+                    stopOnNaturalEnd()
                 }
             } catch (e: Exception) {
-                handleLoopError("${AudioConstants.ErrorTypes.STREAM} Playback error: ${e.message}")
+                reportLoopError("${AudioConstants.ErrorTypes.STREAM} Playback error: ${e.message}")
             }
         }
     }

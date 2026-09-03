@@ -5,6 +5,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.isActive
 import kotlin.jvm.Synchronized
 
 /**
@@ -155,6 +156,21 @@ abstract class AudioEngineBase : AudioEngine {
     @Synchronized
     protected fun handleLoopError(message: String) {
         if (state == AudioState.ACTIVE) handleError(message)
+    }
+
+    /**
+     * Session-loop exit contract. stop()/release() cancel the loop, but blocking IO is not
+     * interruptible: the stale loop keeps unwinding after its session is gone, and by then
+     * the engine may already belong to a newer session — which the stale loop must neither
+     * stop nor error into. Guard every loop-side exit on the loop's own isActive.
+     * Call from inside the loop coroutine only (the receiver is the loop's own scope).
+     */
+    protected fun CoroutineScope.stopOnNaturalEnd() {
+        if (isActive && state == AudioState.ACTIVE) stop()
+    }
+
+    protected fun CoroutineScope.reportLoopError(message: String) {
+        if (isActive) handleLoopError(message)
     }
 
     companion object {

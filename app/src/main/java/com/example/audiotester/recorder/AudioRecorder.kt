@@ -199,12 +199,12 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
                     } else {
                         Log.i(TAG, "Recording completed: %.1fMB".format(Locale.US, mbTotal))
                     }
-                    stop()
+                    stopOnNaturalEnd()
                 }
             } catch (e: SecurityException) {
-                handleLoopError("${AudioConstants.ErrorTypes.PERMISSION} Recording permission denied: ${e.message}")
+                reportLoopError("${AudioConstants.ErrorTypes.PERMISSION} Recording permission denied: ${e.message}")
             } catch (e: Exception) {
-                handleLoopError("${AudioConstants.ErrorTypes.STREAM} Recording error: ${e.message}")
+                reportLoopError("${AudioConstants.ErrorTypes.STREAM} Recording error: ${e.message}")
             }
         }
     }

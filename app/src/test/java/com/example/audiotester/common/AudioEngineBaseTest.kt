@@ -4,15 +4,18 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.launch
 
 /**
  * Engine-level concurrency invariants (AudioEngineBase):
  * - release() during an in-flight start() must still fully release the engine (no leak)
  * - start() after release() must be a no-op (no resources created on a dead engine)
+ * - a stale (cancelled) loop unwinding after a restart must not act on the new session
  */
 class AudioEngineBaseTest {
 
@@ -49,11 +52,38 @@ class AudioEngineBaseTest {
         }
 
         override fun initializeAudio() = true
-        override fun startLoop() {}
         override fun releaseAudioResources() { releaseCount.incrementAndGet() }
 
         fun forceActive() { state = AudioState.ACTIVE }
         fun loopError(message: String) = handleLoopError(message)
+
+        /** Per-session loop latches, recreated by each startLoop(): lets the test pin and release
+         *  one specific session's loop (unwind the stale one while the newer session's loop parks) */
+        class LoopSession {
+            val entered = CountDownLatch(1)
+            val release = CountDownLatch(1)
+            val done = CountDownLatch(1)
+            var fail = false
+        }
+
+        var currentLoop: LoopSession? = null
+            private set
+
+        override fun startLoop() {
+            val session = LoopSession()
+            currentLoop = session
+            loopJob = loopScope.launch {
+                try {
+                    session.entered.countDown()
+                    session.release.await()   // parked "blocking IO": cancellation does not interrupt it
+                    if (session.fail) throw IOException("loop failure")
+                    stopOnNaturalEnd()   // natural end
+                } catch (e: Exception) {
+                    reportLoopError("${AudioConstants.ErrorTypes.STREAM} $startupFailedMessage: ${e.message}")
+                }
+                session.done.countDown()
+            }
+        }
     }
 
     private class RecordingListener : AudioEngine.Listener {
@@ -170,5 +200,62 @@ class AudioEngineBaseTest {
         assertEquals(AudioState.ERROR, engine.testState)
         assertEquals(listOf("boom"), listener.errors)
         assertEquals(1, engine.releaseCount.get())
+    }
+
+    /**
+     * Stale-loop invariant: a loop cancelled by stop() keeps unwinding (blocking IO is not
+     * interruptible) and may do so after a newer session already committed. The stale loop
+     * must neither stop the engine nor report its error into the new session.
+     */
+    @Test
+    fun staleLoopError_afterRestart_spareNewSession() {
+        val engine = TestEngine()
+        val listener = RecordingListener()
+        engine.setListener(listener)
+        engine.startLatch.countDown()   // let start() run through
+
+        assertTrue(engine.start())      // session 1 commits
+        val stale = engine.currentLoop!!
+        assertTrue(stale.entered.await(5, TimeUnit.SECONDS))
+        engine.stop()                   // cancels the loop parked mid-"IO"
+        assertEquals(1, engine.releaseCount.get())
+
+        assertTrue(engine.start())      // session 2 commits while the stale loop is still parked
+        assertEquals(AudioState.ACTIVE, engine.testState)
+
+        stale.fail = true
+        stale.release.countDown()       // stale loop unwinds with an error
+        assertTrue(stale.done.await(5, TimeUnit.SECONDS))
+
+        assertEquals(AudioState.ACTIVE, engine.testState)
+        assertEquals(1, engine.releaseCount.get())
+        assertEquals(1, listener.stopped.get())   // only session 1's stop
+        assertTrue(listener.errors.isEmpty())
+
+        engine.release()
+    }
+
+    @Test
+    fun staleLoopNaturalEnd_afterRestart_spareNewSession() {
+        val engine = TestEngine()
+        val listener = RecordingListener()
+        engine.setListener(listener)
+        engine.startLatch.countDown()
+
+        assertTrue(engine.start())      // session 1 commits
+        val stale = engine.currentLoop!!
+        assertTrue(stale.entered.await(5, TimeUnit.SECONDS))
+        engine.stop()
+
+        assertTrue(engine.start())      // session 2 commits while the stale loop is still parked
+        assertEquals(AudioState.ACTIVE, engine.testState)
+
+        stale.release.countDown()       // stale loop reaches its "natural end"
+        assertTrue(stale.done.await(5, TimeUnit.SECONDS))
+
+        assertEquals(AudioState.ACTIVE, engine.testState)
+        assertEquals(1, listener.stopped.get())   // only session 1's stop
+
+        engine.release()
     }
 }
