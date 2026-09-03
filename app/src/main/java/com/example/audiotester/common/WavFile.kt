@@ -173,6 +173,7 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
         }
     }
 
+    @Synchronized
     fun readData(buffer: ByteArray, offset: Int, length: Int): Int {
         val stream = fileInputStream ?: return -1
         if (offset < 0 || length < 0 || offset + length > buffer.size) return -1
@@ -228,6 +229,7 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
         }
     }
 
+    @Synchronized
     fun writeAudioData(audioData: ByteArray, offset: Int, length: Int): Boolean {
         val out = fileOutputStream ?: return false
         if (offset < 0 || length < 0 || offset + length > audioData.size) return false
@@ -254,7 +256,13 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
      * session that produced no audio data at all: its file is deleted instead of shipping a
      * header-only empty WAV. The patch runs even when the stream close itself failed (the data
      * body is already on disk; FileOutputStream never buffers). Returns whether both succeeded.
+     *
+     * Synchronized with readData/writeAudioData: engine stop() closes the WAV from the engine
+     * thread while the run loop may still be mid-write/read on its own thread — the monitor
+     * serializes them, so the header always counts every accepted write (the writer's internal
+     * close-on-failure is the same monitor, reentrant).
      */
+    @Synchronized
     fun close(): Boolean {
         val out = fileOutputStream
         val closed = try {

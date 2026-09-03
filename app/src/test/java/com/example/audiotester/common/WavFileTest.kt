@@ -10,6 +10,7 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.io.FileInputStream
 import java.io.InputStream
+import java.util.concurrent.CountDownLatch
 
 class WavFileTest {
 
@@ -316,6 +317,49 @@ class WavFileTest {
         assertEquals(16, reader.readData(buf, 0, 16))
         assertArrayEquals(data, buf)
         reader.close()
+    }
+
+    @Test
+    @Throws(InterruptedException::class)
+    fun closeRacingWithWriter_headerAlwaysMatchesAcceptedWrites() {
+        // Engine stop() closes the WAV on the engine thread while the loop thread may still
+        // be writing its last buffer. Contract: every writeAudioData that returned true is
+        // fully reflected in the closed file — declared data size == accepted byte sum ==
+        // bytes on disk (no silent tail loss, no torn header), regardless of interleaving.
+        // Note: this pins the invariant against gross regressions; the unsynchronized tear
+        // window itself was nanoseconds wide and not reliably reproducible in a black-box test.
+        repeat(50) { i ->
+            val file = File(tempFolder.root, "race_$i.wav")
+            val writer = WavFile(file.absolutePath)
+            assertTrue(writer.create(48000, 2, 16))
+
+            val buffer = ByteArray(64 * 1024)
+            var accepted = 0L
+            val firstWriteDone = CountDownLatch(1)
+            val writerThread = Thread {
+                var first = true
+                while (writer.writeAudioData(buffer, 0, buffer.size)) {
+                    accepted += buffer.size
+                    if (first) {
+                        first = false
+                        firstWriteDone.countDown()   // countDown is idempotent
+                    }
+                }
+                firstWriteDone.countDown()           // unblock closer even on a rejected first write
+            }
+            writerThread.start()
+            firstWriteDone.await()
+            assertTrue(writer.close())   // races with the writer's subsequent in-flight writes
+            writerThread.join()
+
+            val reader = WavFile(file.absolutePath)
+            assertTrue(reader.open())
+            assertEquals("iteration $i: header must count exactly the accepted writes",
+                accepted, reader.dataLength)
+            assertEquals("iteration $i: body on disk must match the accepted writes",
+                accepted + 44, file.length())
+            reader.close()
+        }
     }
 
     @Test
