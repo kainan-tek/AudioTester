@@ -55,9 +55,10 @@ class AudioViewModel(
             updateUI {
                 _availableConfigs.value = configs
                 if (configs.isNotEmpty()) {
+                    // No status rewrite here: init already showed the ready text, and a slow
+                    // initial load landing after Start must not overwrite the preparing text
                     val defaultConfig = configs[0]
                     _currentConfig.value = engine.setAudioConfig(defaultConfig)
-                    _statusMessage.value = messages.ready
                 }
                 _errorMessage.value = null
             }

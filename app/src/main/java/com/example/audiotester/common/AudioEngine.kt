@@ -5,7 +5,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.isActive
 import kotlin.jvm.Synchronized
 
 /**
@@ -60,6 +59,17 @@ abstract class AudioEngineBase : AudioEngine {
     // serialize against each other instead of interleaving
     private var released = false
 
+    /**
+     * Session token, incremented under the engine lock at each start commit. Loop-side callers
+     * (run loop, focus-loss callback) capture their own token and pass it back on stop/error;
+     * the compare+act under the engine lock makes a stale caller a no-op instead of landing
+     * on a newer session.
+     */
+    private var session = 0
+
+    /** Current session token; read under the engine lock to bind callbacks to this session (e.g. focus setup during start) */
+    protected val currentSession: Int get() = session
+
     protected val loopScope = CoroutineScope(Dispatchers.IO)
     protected var loopJob: Job? = null
 
@@ -85,10 +95,13 @@ abstract class AudioEngineBase : AudioEngine {
         }
         if (state == AudioState.ERROR) state = AudioState.IDLE
         return try {
+            // Claimed before the hooks so they see the token this start commits; a failed
+            // attempt burns a token — harmless, only uniqueness matters.
+            session += 1
             if (!openResources()) return false
             if (!initializeAudio()) return false
             state = AudioState.ACTIVE
-            startLoop()
+            startLoop(session)
             engineListener?.onStarted()
             Log.i(tag, startedMessage)
             true
@@ -107,8 +120,8 @@ abstract class AudioEngineBase : AudioEngine {
     /** Subclass: build the AudioTrack/AudioRecord; report failures via handleError, return false */
     protected abstract fun initializeAudio(): Boolean
 
-    /** Subclass: launch the run loop on loopScope (assign loopJob) */
-    protected abstract fun startLoop()
+    /** Subclass: launch the run loop on loopScope (assign loopJob); the loop captures [session] as its own token */
+    protected abstract fun startLoop(session: Int)
 
     // Synchronized: start() reads currentConfig piecemeal (openResources → initializeAudio →
     // startLoop); a config swap must not interleave with an in-flight start. Under the engine
@@ -125,14 +138,23 @@ abstract class AudioEngineBase : AudioEngine {
     }
 
     @Synchronized
-    override fun stop() {
+    override fun stop() = stopIfSession(session)
+
+    /** Lock-held stop body; caller must have verified the state */
+    private fun stopLocked() {
         Log.d(tag, "Stopping")
-        if (state != AudioState.ACTIVE) return
         state = AudioState.IDLE
         loopJob?.cancel()
         releaseAudioResources()
         engineListener?.onStopped()
         Log.i(tag, "Stopped")
+    }
+
+    /** Stops only if [expected] is still the current session and the engine is ACTIVE (see [session]) */
+    @Synchronized
+    protected fun stopIfSession(expected: Int) {
+        if (expected != session || state != AudioState.ACTIVE) return
+        stopLocked()
     }
 
     @Synchronized
@@ -152,25 +174,15 @@ abstract class AudioEngineBase : AudioEngine {
         releaseAudioResources()
     }
 
-    /** Run-loop failure: a stop() that completed first is a clean exit, not an error */
-    @Synchronized
-    protected fun handleLoopError(message: String) {
-        if (state == AudioState.ACTIVE) handleError(message)
-    }
-
     /**
-     * Session-loop exit contract. stop()/release() cancel the loop, but blocking IO is not
-     * interruptible: the stale loop keeps unwinding after its session is gone, and by then
-     * the engine may already belong to a newer session — which the stale loop must neither
-     * stop nor error into. Guard every loop-side exit on the loop's own isActive.
-     * Call from inside the loop coroutine only (the receiver is the loop's own scope).
+     * Run-loop failure carrying the loop's own [expected] session token; a stale caller is a
+     * no-op (see [session]). Cancellation never false-errors either: stop()/release() set IDLE
+     * under the lock before cancelling, so a cancelled loop never sees matching token + ACTIVE.
      */
-    protected fun CoroutineScope.stopOnNaturalEnd() {
-        if (isActive && state == AudioState.ACTIVE) stop()
-    }
-
-    protected fun CoroutineScope.reportLoopError(message: String) {
-        if (isActive) handleLoopError(message)
+    @Synchronized
+    protected fun handleLoopError(expected: Int, message: String) {
+        if (expected != session || state != AudioState.ACTIVE) return
+        handleError(message)
     }
 
     companion object {

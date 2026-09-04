@@ -50,9 +50,7 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
         get() = channelCount * bitsPerSample / 8
 
     val duration: Float
-        get() = if (sampleRate > 0 && channelCount > 0 && bitsPerSample > 0) {
-            dataLength.toFloat() / (sampleRate * channelCount * (bitsPerSample / 8))
-        } else 0f
+        get() = if (byteRate > 0) dataLength.toFloat() / byteRate else 0f
 
     // ===== Read side =====
 
@@ -115,6 +113,10 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
                                 return false
                             }
                             audioFormat = readLittleEndianShort(fmt, 24)
+                            // wValidBitsPerSample (fmt[18]) is intentionally not read: the spec
+                            // left-justifies valid bits in the container, so playing by the container
+                            // size is level-correct; relabeling to the valid depth would misalign
+                            // the container-sized frames into noise
                         }
                     }
                     "data" -> {
@@ -197,8 +199,6 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
             -1
         }
     }
-
-    fun isValid(): Boolean = fileInputStream != null && sampleRate > 0 && channelCount > 0 && bitsPerSample > 0
 
     val channelDescription: String
         get() = getChannelInfo(channelCount).description
@@ -345,7 +345,7 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
         8 -> ChannelInfo("7.1 Surround", "L R C LFE Ls Rs Lrs Rrs")
         10 -> ChannelInfo("5.1.4 Surround", "L R C LFE Ls Rs Ltf Rtf Ltb Rtb")
         12 -> ChannelInfo("7.1.4 Surround", "L R C LFE Ls Rs Lrs Rrs Ltf Rtf Ltb Rtb")
-        else -> ChannelInfo("$count channels (playback as stereo)", "$count channels → Stereo (L R)")
+        else -> ChannelInfo("$count channels", "$count channels (layout not labeled)")
     }
 
     private fun readLittleEndianShort(bytes: ByteArray, offset: Int): Int =

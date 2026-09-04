@@ -24,12 +24,11 @@ class RecorderFragment : AudioTestFragment() {
 
     // Recording only ever writes to app-scoped dirs (getExternalFilesDir / filesDir) — no
     // storage permission is needed on any supported API level; RECORD_AUDIO is the sole gate
-    override fun requiredPermissions(): Array<String> = arrayOf(Manifest.permission.RECORD_AUDIO)
+    override fun permissionsForCurrentConfig(): Array<String> = arrayOf(Manifest.permission.RECORD_AUDIO)
 
     override fun formatInfo(config: AudioConfig): String {
-        val filePathDisplay = config.audioFilePath.ifBlank {
-            "<App default path (auto-generated at recording start)>"
-        }
+        val filePathDisplay = if (config.hasUsableFilePath) config.audioFilePath
+            else "<App default path (auto-generated at recording start)>"
         return "Current Config: ${config.description}\n" +
             "Source: ${config.audioSource}\n" +
             "Parameters: ${config.sampleRate}Hz | ${config.channelCount}ch | ${config.audioFormat}bit\n" +

@@ -23,6 +23,10 @@ data class AudioConfig(
     val audioFilePath: String = "",
     val description: String = "Default Configuration",
 ) {
+    /** True when audioFilePath is used as-is; empty/asset:// is a sentinel (player: built-in source, recorder: auto-generated path) */
+    val hasUsableFilePath: Boolean
+        get() = audioFilePath.isNotEmpty() && !audioFilePath.startsWith("asset://")
+
     init {
         // Upper bound: a huge multiplier would overflow minBufferSize * multiplier at start
         // time; 100 keeps even the largest real minBufferSize far away from Int overflow

@@ -33,6 +33,10 @@ class AudioEngineBaseTest {
         val testState: AudioState get() = state
         val testConfig: AudioConfig get() = currentConfig
 
+        /** Session token captured by the most recent startLoop() — lets tests grab a stale token before a restart */
+        var currentToken: Int = -1
+            private set
+
         /** Signal so the test can pin release() to finish before start() commits (the leaking order) */
         override fun release() {
             releaseEntered.countDown()
@@ -51,11 +55,20 @@ class AudioEngineBaseTest {
             return startResult
         }
 
-        override fun initializeAudio() = true
+        /** Token visible during initializeAudio: focus setup happens here in real engines, so it
+         *  must already be the token this start will commit — otherwise every focus-loss stop
+         *  carries a stale token and is a permanent no-op */
+        var tokenSeenByInitializeAudio: Int = -1
+            private set
+
+        override fun initializeAudio(): Boolean {
+            tokenSeenByInitializeAudio = currentSession
+            return true
+        }
         override fun releaseAudioResources() { releaseCount.incrementAndGet() }
 
-        fun forceActive() { state = AudioState.ACTIVE }
-        fun loopError(message: String) = handleLoopError(message)
+        fun loopError(token: Int, message: String) = handleLoopError(token, message)
+        fun naturalEnd(token: Int) = stopIfSession(token)
 
         /** Per-session loop latches, recreated by each startLoop(): lets the test pin and release
          *  one specific session's loop (unwind the stale one while the newer session's loop parks) */
@@ -69,19 +82,20 @@ class AudioEngineBaseTest {
         var currentLoop: LoopSession? = null
             private set
 
-        override fun startLoop() {
-            val session = LoopSession()
-            currentLoop = session
+        override fun startLoop(session: Int) {
+            currentToken = session
+            val loop = LoopSession()
+            currentLoop = loop
             loopJob = loopScope.launch {
                 try {
-                    session.entered.countDown()
-                    session.release.await()   // parked "blocking IO": cancellation does not interrupt it
-                    if (session.fail) throw IOException("loop failure")
-                    stopOnNaturalEnd()   // natural end
+                    loop.entered.countDown()
+                    loop.release.await()   // parked "blocking IO": cancellation does not interrupt it
+                    if (loop.fail) throw IOException("loop failure")
+                    stopIfSession(session)   // natural end
                 } catch (e: Exception) {
-                    reportLoopError("${AudioConstants.ErrorTypes.STREAM} $startupFailedMessage: ${e.message}")
+                    handleLoopError(session, "${AudioConstants.ErrorTypes.STREAM} $startupFailedMessage: ${e.message}")
                 }
-                session.done.countDown()
+                loop.done.countDown()
             }
         }
     }
@@ -142,7 +156,7 @@ class AudioEngineBaseTest {
         val listener = RecordingListener()
         engine.setListener(listener)
 
-        engine.loopError("boom")
+        engine.loopError(engine.currentToken, "boom")
 
         assertEquals(AudioState.IDLE, engine.testState)
         assertTrue(listener.errors.isEmpty())
@@ -193,13 +207,16 @@ class AudioEngineBaseTest {
         val engine = TestEngine()
         val listener = RecordingListener()
         engine.setListener(listener)
-        engine.forceActive()
+        engine.startLatch.countDown()
+        assertTrue(engine.start())
 
-        engine.loopError("boom")
+        engine.loopError(engine.currentToken, "boom")
 
         assertEquals(AudioState.ERROR, engine.testState)
         assertEquals(listOf("boom"), listener.errors)
         assertEquals(1, engine.releaseCount.get())
+
+        engine.release()   // also parks-and-cancels the loop started above (keeps the test hermetic)
     }
 
     /**
@@ -255,6 +272,75 @@ class AudioEngineBaseTest {
 
         assertEquals(AudioState.ACTIVE, engine.testState)
         assertEquals(1, listener.stopped.get())   // only session 1's stop
+
+        engine.release()
+    }
+
+    /**
+     * Session-token invariant: a loop-side stop/error carrying a stale session token must be
+     * a no-op after a newer session committed — closing the check-then-act window where the
+     * stale loop passes the (unlocked) isActive/state guard but stop() lands on the new session.
+     */
+    @Test
+    fun staleTokenNaturalEnd_afterRestart_sparesNewSession() {
+        val engine = TestEngine()
+        val listener = RecordingListener()
+        engine.setListener(listener)
+        engine.startLatch.countDown()
+
+        assertTrue(engine.start())      // session 1
+        val staleToken = engine.currentToken
+        engine.stop()
+        assertTrue(engine.start())      // session 2 commits
+        assertEquals(AudioState.ACTIVE, engine.testState)
+
+        engine.naturalEnd(staleToken)   // stale loop unwinding after the restart
+
+        assertEquals(AudioState.ACTIVE, engine.testState)
+        assertEquals(1, listener.stopped.get())   // only session 1's stop
+        assertEquals(1, engine.releaseCount.get())
+
+        engine.release()
+    }
+
+    @Test
+    fun staleTokenLoopError_afterRestart_sparesNewSession() {
+        val engine = TestEngine()
+        val listener = RecordingListener()
+        engine.setListener(listener)
+        engine.startLatch.countDown()
+
+        assertTrue(engine.start())      // session 1
+        val staleToken = engine.currentToken
+        engine.stop()
+        assertTrue(engine.start())      // session 2 commits
+        assertEquals(AudioState.ACTIVE, engine.testState)
+
+        engine.loopError(staleToken, "boom")
+
+        assertEquals(AudioState.ACTIVE, engine.testState)
+        assertTrue(listener.errors.isEmpty())
+        assertEquals(1, engine.releaseCount.get())
+
+        engine.release()
+    }
+
+    /**
+     * Focus-setup invariant: the token visible during initializeAudio() (where real engines
+     * capture the focus-loss callback) must equal the token passed to startLoop() — across
+     * restarts too, not just the first start.
+     */
+    @Test
+    fun initializeAudio_seesTheSessionTokenGivenToStartLoop() {
+        val engine = TestEngine()
+        engine.startLatch.countDown()
+
+        assertTrue(engine.start())
+        assertEquals(engine.currentToken, engine.tokenSeenByInitializeAudio)
+
+        engine.stop()
+        assertTrue(engine.start())
+        assertEquals(engine.currentToken, engine.tokenSeenByInitializeAudio)
 
         engine.release()
     }

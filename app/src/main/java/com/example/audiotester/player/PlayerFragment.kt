@@ -24,18 +24,16 @@ class PlayerFragment : AudioTestFragment() {
 
     override fun createEngine(context: Context): AudioEngine = AudioPlayer(context)
 
-    override fun requiredPermissions(): Array<String> =
+    private fun storagePermissions(): Array<String> =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             arrayOf(Manifest.permission.READ_MEDIA_AUDIO)
         } else {
             arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
 
-    /** Built-in audio sources (empty path/asset://) read from assets and need no storage permission; skip the permission gate */
-    override fun permissionsForCurrentConfig(): Array<String> {
-        val path = viewModel.currentConfig.value?.audioFilePath.orEmpty()
-        return if (path.isEmpty() || path.startsWith("asset://")) emptyArray() else requiredPermissions()
-    }
+    /** Built-in audio sources (sentinel path, see AudioConfig.hasUsableFilePath) read from assets and need no storage permission; skip the permission gate */
+    override fun permissionsForCurrentConfig(): Array<String> =
+        if (viewModel.currentConfig.value?.hasUsableFilePath == true) storagePermissions() else emptyArray()
 
     override fun formatInfo(config: AudioConfig): String =
         "Current Config: ${config.description}\n" +

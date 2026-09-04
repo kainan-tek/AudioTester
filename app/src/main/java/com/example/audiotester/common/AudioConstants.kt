@@ -225,22 +225,13 @@ object AudioConstants {
     )
 
     fun getFormatFromBitDepth(bitsPerSample: Int): Int =
-        BIT_DEPTH_FORMATS[bitsPerSample] ?: run {
-            android.util.Log.w("AudioConstants", "Unsupported bit depth: $bitsPerSample, using 16-bit")
-            AudioFormat.ENCODING_PCM_16BIT
-        }
+        requireNotNull(BIT_DEPTH_FORMATS[bitsPerSample]) { "Unsupported bit depth: $bitsPerSample" }
 
     fun getOutputChannelMask(channelCount: Int): Int =
-        OUTPUT_CHANNEL_MASKS[channelCount] ?: run {
-            android.util.Log.w("AudioConstants", "Unsupported channel count: $channelCount, using stereo playback")
-            AudioFormat.CHANNEL_OUT_STEREO
-        }
+        requireNotNull(OUTPUT_CHANNEL_MASKS[channelCount]) { "Unsupported output channel count: $channelCount" }
 
     fun getInputChannelMask(channelCount: Int): Int =
-        INPUT_CHANNEL_MASKS[channelCount] ?: run {
-            android.util.Log.w("AudioConstants", "Unsupported input channel count: $channelCount, using CHANNEL_IN_STEREO")
-            AudioFormat.CHANNEL_IN_STEREO
-        }
+        requireNotNull(INPUT_CHANNEL_MASKS[channelCount]) { "Unsupported input channel count: $channelCount" }
 
     fun isValidSampleRate(rate: Int): Boolean = rate in 8000..192000
 

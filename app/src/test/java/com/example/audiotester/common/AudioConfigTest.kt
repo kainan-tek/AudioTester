@@ -1,6 +1,7 @@
 package com.example.audiotester.common
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
@@ -142,6 +143,15 @@ class AudioConfigTest {
         )
         assertEquals(1, configs.size)
         assertEquals("ok", configs[0].description)
+    }
+
+    @Test
+    fun hasUsableFilePath_sentinelSemantics() {
+        // empty/asset:// is the sentinel the engines replace (recorder: auto-generated path,
+        // player: built-in asset); any other string is a real path used as-is
+        assertFalse(AudioConfig().hasUsableFilePath)
+        assertFalse(AudioConfig(audioFilePath = "asset://sample/x.wav").hasUsableFilePath)
+        assertTrue(AudioConfig(audioFilePath = "/data/local/tmp/rec.wav").hasUsableFilePath)
     }
 
     @Test

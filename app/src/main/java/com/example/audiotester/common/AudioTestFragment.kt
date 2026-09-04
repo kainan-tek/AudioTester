@@ -74,7 +74,7 @@ abstract class AudioTestFragment : Fragment() {
     protected abstract fun createEngine(context: Context): AudioEngine
     protected abstract val section: String
     protected abstract val messages: AudioMessages
-    protected abstract fun requiredPermissions(): Array<String>
+    protected abstract fun permissionsForCurrentConfig(): Array<String>
     protected abstract fun formatInfo(config: AudioConfig): String
     protected abstract fun friendlyErrorMessage(raw: String): String
 
@@ -249,10 +249,7 @@ abstract class AudioTestFragment : Fragment() {
             ?: run { infoText.text = "Information" }
     }
 
-    // ===== Permissions (features differ only in requiredPermissions(); logic is shared) =====
-
-    /** Runtime permissions actually needed by the current config (subclasses may trim per config, e.g. playing a built-in source needs no storage permission) */
-    protected open fun permissionsForCurrentConfig(): Array<String> = requiredPermissions()
+    // ===== Permissions (each feature declares the permissions its current config needs) =====
 
     private fun hasPermission(): Boolean = permissionsForCurrentConfig().all {
         ContextCompat.checkSelfPermission(requireContext(), it) == PackageManager.PERMISSION_GRANTED
@@ -269,13 +266,11 @@ abstract class AudioTestFragment : Fragment() {
         startActivity(intent)
     }
 
-    // ===== Mutual exclusion: switching tabs moves the leaving page RESUMED→STARTED, triggering
-    // onPause; going to background works the same way =====
+    // ===== Mutual exclusion: switching tabs or going to background triggers onPause =====
 
     override fun onPause() {
         super.onPause()
-        // Switching tabs moves the leaving page RESUMED→STARTED, triggering onPause; stop
-        // unconditionally to also cover the startup race (start not yet committed)
+        // Stop unconditionally to also cover the startup race (start not yet committed)
         viewModel.stop()
     }
 }

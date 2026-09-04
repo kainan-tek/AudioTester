@@ -12,6 +12,7 @@ import com.example.audiotester.common.AudioConstants
 import com.example.audiotester.common.AudioEngineBase
 import com.example.audiotester.common.AudioState
 import com.example.audiotester.common.WavFile
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -89,7 +90,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
             wavFile.open()
         }
 
-        if (!opened || !wavFile.isValid()) {
+        if (!opened) {
             handleError("${AudioConstants.ErrorTypes.FILE} Cannot open audio file: $path")
             return false
         }
@@ -183,10 +184,14 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
         // (SDK usages are always < 1000; this check only affects Usage.SYSTEM_MAP configs)
         if (AudioConstants.isSystemUsage(currentConfig.usage)) return true
 
+        // Bind the focus callbacks to this session: this runs under the engine lock during
+        // start(), so a queued focus-loss stop can never land on a newer session
+        val mySession = currentSession
+
         val focusType = determineFocusType()
 
         val focusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
-            handleFocusChange(focusChange)
+            handleFocusChange(focusChange, mySession)
         }
 
         val request = AudioFocusRequest.Builder(focusType).setAudioAttributes(audioAttributes)
@@ -213,15 +218,15 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
     /**
      * The UI has no pause support, so every focus loss is turned into a stop
      */
-    private fun handleFocusChange(focusChange: Int) {
+    private fun handleFocusChange(focusChange: Int, session: Int) {
         when (focusChange) {
             AudioManager.AUDIOFOCUS_LOSS,
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
                 Log.d(TAG, "Audio focus lost (type: $focusChange), stopping playback")
-                // Focus callbacks land on the main thread; stop() takes the engine lock and
-                // closes the WAV (disk IO) — post it off-main to keep the callback cheap
-                loopScope.launch { stop() }
+                // Focus callbacks land on the main thread; stopIfSession takes the engine lock
+                // and closes the WAV (disk IO) — post it off-main to keep the callback cheap
+                loopScope.launch { stopIfSession(session) }
             }
         }
     }
@@ -233,30 +238,32 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
         }
     }
 
-    override fun startLoop() {
+    override fun startLoop(session: Int) {
         loopJob = loopScope.launch {
-            val wavFile = wavFile ?: return@launch
-            val audioTrack = audioTrack ?: return@launch
-
-            val bytesPerFrame = wavFile.blockAlign
-            val audioTrackBufferSize = audioTrack.bufferSizeInFrames * bytesPerFrame
-            val rawWriteBufferSize =
-                when (AudioConstants.getPerformanceMode(currentConfig.performanceMode)) {
-                    AudioTrack.PERFORMANCE_MODE_LOW_LATENCY -> audioTrackBufferSize / 4
-                    AudioTrack.PERFORMANCE_MODE_POWER_SAVING -> audioTrackBufferSize / 2
-                    else -> audioTrackBufferSize / 3
-                }
-            // Round down to a whole number of frames: write() only consumes whole frames
-            // (userSize >= mFrameSize loop); a leftover partial frame can never be written and
-            // returns 0; non-frame-aligned blocks would drop bytes every block and shift all
-            // subsequent data into noise
-            val writeBufferSize = rawWriteBufferSize / bytesPerFrame * bytesPerFrame
-
-            val buffer = ByteArray(writeBufferSize)
-            var totalBytes = 0L
-            var lastLoggedBytes = 0L
-
+            // Everything after launch is inside the try: a stop landing mid-prologue releases the
+            // audio objects concurrently, so even buffer setup must funnel through handleLoopError
             try {
+                val wavFile = wavFile ?: return@launch
+                val audioTrack = audioTrack ?: return@launch
+
+                val bytesPerFrame = wavFile.blockAlign
+                val audioTrackBufferSize = audioTrack.bufferSizeInFrames * bytesPerFrame
+                val rawWriteBufferSize =
+                    when (AudioConstants.getPerformanceMode(currentConfig.performanceMode)) {
+                        AudioTrack.PERFORMANCE_MODE_LOW_LATENCY -> audioTrackBufferSize / 4
+                        AudioTrack.PERFORMANCE_MODE_POWER_SAVING -> audioTrackBufferSize / 2
+                        else -> audioTrackBufferSize / 3
+                    }
+                // Round down to a whole number of frames: write() only consumes whole frames
+                // (userSize >= mFrameSize loop); a leftover partial frame can never be written and
+                // returns 0; non-frame-aligned blocks would drop bytes every block and shift all
+                // subsequent data into noise
+                val writeBufferSize = rawWriteBufferSize / bytesPerFrame * bytesPerFrame
+
+                val buffer = ByteArray(writeBufferSize)
+                var totalBytes = 0L
+                var lastLoggedBytes = 0L
+
                 audioTrack.play()
 
                 var readLoopEnded = false
@@ -315,10 +322,14 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                     }
                     val mbTotal = totalBytes / (1024.0 * 1024.0)
                     Log.i(TAG, "Playback completed: %.1fMB".format(Locale.US, mbTotal))
-                    stopOnNaturalEnd()
+                    stopIfSession(session)
                 }
+            } catch (e: CancellationException) {
+                // Cancellation is a stop, not an error: rethrow rather than rely on
+                // handleLoopError's guard (it only no-ops because stopLocked sets IDLE before cancel)
+                throw e
             } catch (e: Exception) {
-                reportLoopError("${AudioConstants.ErrorTypes.STREAM} Playback error: ${e.message}")
+                handleLoopError(session, "${AudioConstants.ErrorTypes.STREAM} Playback error: ${e.message}")
             }
         }
     }

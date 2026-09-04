@@ -72,9 +72,8 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
         // orphan WAV behind
         if (!validateAudioParameters()) return false
 
-        val outputPath = currentConfig.audioFilePath
-            .takeIf { it.isNotEmpty() && !it.startsWith("asset://") }
-            ?: generateOutputFilePath()
+        val outputPath = if (currentConfig.hasUsableFilePath) currentConfig.audioFilePath
+            else generateOutputFilePath()
 
         return try {
             val wavFile = WavFile(outputPath)
@@ -168,22 +167,24 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
         }
     }
 
-    override fun startLoop() {
+    override fun startLoop(session: Int) {
         loopJob = loopScope.launch {
-            val audioRecord = audioRecord ?: return@launch
-            val wavFile = wavFile ?: return@launch
-
-            // bufferSizeInFrames / 3 keeps the read buffer a whole number of frames: a read
-            // returning a partial frame would shift every block written to the WAV into
-            // misaligned noise (the player rounds its write buffer the same way)
-            val readBufferSize = audioRecord.bufferSizeInFrames / 3 * wavFile.blockAlign
-
-            val buffer = ByteArray(readBufferSize)
-            var totalBytes = 0L
-            var lastLoggedBytes = 0L
-            var saveFailed = false
-
+            // Everything after launch is inside the try: a stop landing mid-prologue releases the
+            // audio objects concurrently, so even buffer setup must funnel through handleLoopError
             try {
+                val audioRecord = audioRecord ?: return@launch
+                val wavFile = wavFile ?: return@launch
+
+                // bufferSizeInFrames / 3 keeps the read buffer a whole number of frames: a read
+                // returning a partial frame would shift every block written to the WAV into
+                // misaligned noise (the player rounds its write buffer the same way)
+                val readBufferSize = audioRecord.bufferSizeInFrames / 3 * wavFile.blockAlign
+
+                val buffer = ByteArray(readBufferSize)
+                var totalBytes = 0L
+                var lastLoggedBytes = 0L
+                var saveFailed = false
+
                 audioRecord.startRecording()
                 Log.i(TAG, "Started recording - ${currentConfig.description}")
 
@@ -215,12 +216,12 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
                     } else {
                         Log.i(TAG, "Recording completed: %.1fMB".format(Locale.US, mbTotal))
                     }
-                    stopOnNaturalEnd()
+                    stopIfSession(session)
                 }
             } catch (e: SecurityException) {
-                reportLoopError("${AudioConstants.ErrorTypes.PERMISSION} Recording permission denied: ${e.message}")
+                handleLoopError(session, "${AudioConstants.ErrorTypes.PERMISSION} Recording permission denied: ${e.message}")
             } catch (e: Exception) {
-                reportLoopError("${AudioConstants.ErrorTypes.STREAM} Recording error: ${e.message}")
+                handleLoopError(session, "${AudioConstants.ErrorTypes.STREAM} Recording error: ${e.message}")
             }
         }
     }
