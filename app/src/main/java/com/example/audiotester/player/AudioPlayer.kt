@@ -263,7 +263,15 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
 
                 var readLoopEnded = false
                 while (isActive && state == AudioState.ACTIVE) {
-                    val bytesRead = wavFile.readData(buffer, 0, buffer.size)
+                    // readData deliberately propagates IO errors (see WavFile): a mid-file read
+                    // failure is a file/media fault — the bottom catch's [STREAM] would
+                    // misdescribe it as an initialization failure that "trying again" could fix
+                    val bytesRead = try {
+                        wavFile.readData(buffer, 0, buffer.size)
+                    } catch (e: IOException) {
+                        handleLoopError(session, AudioErrorType.FILE, "Audio file read failed: ${e.message}")
+                        return@launch
+                    }
                     if (bytesRead <= 0) {
                         Log.d(TAG, "File reading completed")
                         readLoopEnded = true

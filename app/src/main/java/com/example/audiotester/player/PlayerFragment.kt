@@ -51,7 +51,7 @@ class PlayerFragment : AudioTestFragment() {
 
     override fun friendlyMessage(type: AudioErrorType): String = when (type) {
         AudioErrorType.FILE ->
-            "Unable to open audio file. The file may be corrupted or inaccessible."
+            "Cannot access the audio file. It may be corrupted or inaccessible."
         AudioErrorType.TRUNCATED ->
             "The audio file is incomplete: its content ended before the declared size, so playback stopped early."
         AudioErrorType.STREAM ->
