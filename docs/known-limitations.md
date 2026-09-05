@@ -77,3 +77,17 @@ data size = 0xFFFFFFFF 的流式 WAV，`duration` 按无符号值计算得出约
 `AudioPlayer.startLoop` 的截断判定（`hasUnreadDeclaredData`）在 `state == ACTIVE` 读取**之后**求值；若 `stop()` 全程（IDLE → cancel → `releaseAudioResources` → `close()` 清零 `remainingData`）恰好塞进这两条相邻语句之间（loop 线程恰在此被抢占），截断文件会被记为 "Playback completed" 而非 TRUNCATED，丢失诊断。
 
 不修理由：窗口为纳秒级——需 loop 线程恰在两条语句间被抢占，且 stop() 的 AudioTrack release + 磁盘 IO 完整落入该间隙，实际不可观测。修复方案已验证可行（判定快照提前到 state 读取之前，2 行；消息值的第二次读仅在 `handleLoopError` 真正报错、即无并发 close 时被消费），但收益仅限该极端场景，相邻交错（stop 先于判定 / 后于判定）的行为本已正确。
+
+## 17. STARTING 期销毁竞态下 FINALIZE 错误被吞（审查发现，评估后不修）
+
+三重巧合窗口：STARTING 期间 `onPause`（只置 `stopRequested` 标志）→ Activity 在引擎提交 ACTIVE 前销毁（androidx 先取消 `viewModelScope` 再调 `onCleared`）→ `release()` 的 `wavFile.close()` 补头失败。此时 `onError(FINALIZE)` 经 `updateUI` 落在已取消的 scope 上被丢弃，用户留下头部不完整的不可读 WAV，唯一痕迹是 logcat（`AudioRecorder.kt` 的就地直报注释已锚定）。
+
+注意窗口比三重巧合更窄：仅 `onPause` 未销毁时 ViewModel 存活，`onStarted` 的纠正性 stop 正常执行，错误写入 LiveData、回来后被新观察者消费（`AudioTestFragment` 的 consume-on-delivery 注释）；丢失仅发生在 scope 先死的完全销毁路径。
+
+不修理由：错误发生时 Activity 已销毁、ViewModel 即将死亡，无任何存活接收者（LiveData/对话框/Toast 均随生命周期消亡）——真正送达需引入跨生命周期机制（通知或持久化错误标记），为三重巧合下的诊断信息丢失不成比例。失效模式是诊断缺失而非功能错误，不可读文件在下次播放尝试时自然暴露。
+
+## 18. start() 阶段 OOM 崩溃，与 loop 侧"报告而非崩溃"政策不对称（审查发现，评估后不修）
+
+`AudioEngineBase.start()` 的 catch 链只有 `SecurityException` + `Exception`，start 期间若抛 `OutOfMemoryError` 会穿透 ViewModel 协程崩溃进程；两个引擎的循环则刻意 catch OOM 并报告（政策注释见各 `startLoop`）。
+
+不修理由：两条 catch 路径覆盖的是不同的分配点——loop 侧守着真实的大 Java 堆分配（`ByteArray(writeBufferSize)`，bufferMultiplier=100 时数十 MB），风险真实存在；start 侧无对应物，大缓冲是 native 分配（不足时以 IAE/ISE 浮出，已被现有 catch 链覆盖），Java 堆侧只有 Builder 内部小分配。现实时序下即使堆紧张，start 的小分配挤过去后 loop 的大分配 OOM 也由 loop catch 接住；要让 start 侧 catch 起作用需连小分配都失败的深度堆耗尽，而那时 `handleError` 自身的分配同样会崩——catch 只是换了个崩溃点。为不存在的分配点复制政策，属于为假设场景加代码。
