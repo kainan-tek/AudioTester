@@ -116,6 +116,29 @@ class AudioConfigTest {
     }
 
     @Test
+    fun emptyAndBlankEnumElements_fallBackToDefaults() {
+        // <usage></usage> means "unspecified", like the old parser's silent fallback — it must
+        // not reach start() as a typo'd "" and hard-fail with an uninformative "Unknown usage: "
+        val configs = AudioConfig.parseConfigs(
+            stream("""
+                <audioConfigs>
+                  <player>
+                    <config>
+                      <usage></usage>
+                      <contentType>   </contentType>
+                      <description></description>
+                    </config>
+                  </player>
+                </audioConfigs>
+            """.trimIndent()), "player"
+        )
+        assertEquals(1, configs.size)
+        assertEquals("USAGE_MEDIA", configs[0].usage)
+        assertEquals("CONTENT_TYPE_MUSIC", configs[0].contentType)
+        assertEquals("Custom configuration", configs[0].description)
+    }
+
+    @Test
     fun realAssetsFile_parsesBothSections() {
         // Parse the real asset from the source tree directly, so XML typos surface here
         // instead of only after deployment to a device

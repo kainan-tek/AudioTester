@@ -113,9 +113,10 @@ object ConfigLoader {
     }
 }
 
-/** Reads child element text: missing element → default value */
+/** Reads child element text: missing OR empty element → default value (an empty <usage></usage>
+ *  means "unspecified" and falls back like the old parser did; a typo'd value still fails loudly) */
 private fun Element.childText(name: String, default: String): String =
-    getElementsByTagName(name).item(0)?.textContent?.trim() ?: default
+    getElementsByTagName(name).item(0)?.textContent?.trim()?.ifEmpty { null } ?: default
 
 private fun Element.childInt(name: String, default: Int): Int =
     getElementsByTagName(name).item(0)?.textContent?.trim()?.toIntOrNull() ?: default
