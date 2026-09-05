@@ -45,3 +45,27 @@ data size = 0xFFFFFFFF 的流式 WAV，`duration` 按无符号值计算得出约
 ## 9. 枚举校验位于引擎启动期而非解析期（审查意见，评估后拒绝）
 
 有审查意见建议把 `findUnknown*Enum` 校验从各引擎 `openResources` 移到 `parseConfigs` 解析边界。拒绝理由：现状下拼错的配置**留在 spinner 列表里可见**、Start 时给出指名道姓的 `[PARAM]` 错误；移到解析期则坏配置被 `runCatching` 静默跳过、从列表消失，测试者无从得知原因。可见性 + 启动时具名失败更符合 fail-loud 哲学；维护成本由对称的 `findUnknown*` 与 `EngineEnumValidationTest` 覆盖。
+
+## 10. Spinner 选中回声采用等值守卫而非 init-consume 标志（审查意见，评估后拒绝）
+
+`AudioTestFragment.onItemSelected` 用 `selected == currentConfig.value` 识别程序化回声。审查指出重载配置时（先设 `availableConfigs` 后设 `currentConfig`）存在回声被误当作用户切换的窗口。拒绝理由：`onItemSelected` 在布局遍历时才派发、只携带最终选中位置，且两个 LiveData 观察者在同一主线程块内同步执行完毕——回调到达时 `currentConfig` 已是最终值，守卫正确早退；回滚到 init-consume 标志反而对"同步 / 异步 / 不回调"的平台投递怪癖更脆弱（等值守卫正是 `b00a7f6` 为替代该标志而引入）。残余影响：极怪异投递下一次多余 toast，状态收敛正确。另：两条字节级相同的配置条目之间切换会被等值守卫静默吞掉——切换成功与被吞功能差异为零，而按位置判断会因 `indexOf` 在重复条目上恒返回首个孪生而误触发，等值守卫恰对此免疫。
+
+## 11. 播放器的 asset:// 是指定路径而非哨兵，未并入 hasUsableFilePath（审查意见，评估后拒绝）
+
+`AudioPlayer.openResources` 的 `ifEmpty + startsWith("asset://")` 看似重复实现了 `hasUsableFilePath`，实为三分派：空串折叠为默认 asset、`asset://xxx` 打开**指定的** asset、其余读磁盘；录制器的 `asset://` 才是哨兵（自动生成输出路径）。若用 `hasUsableFilePath` 收敛，指定 asset 的配置会被静默替换为默认文件。`hasUsableFilePath` 表达的是粗粒度分类（权限门、显示层），表达不了引擎的分派粒度。
+
+## 12. 两处 4 行级重复未抽取：OOM catch 与 friendlyMessage 公共条目（审查意见，评估后拒绝）
+
+`catch (OutOfMemoryError)` 块（含策略注释）在两个引擎循环中逐字重复；STREAM/PARAM 友好文案在两个 Fragment 中逐字重复。拒绝理由：抽 helper 净行数为零、多一跳间接；friendlyMessage 上移基类需死分支兜底，并把每个 Fragment 的穷尽 `when` 劈成两半——新增 `AudioErrorType` 时子类不再编译失败，丢失 fail-loud 检查（现连不可达分支都特意保留，见 `AudioErrorType` 文档注释）。三行级重复优于过早抽象。
+
+## 13. 枚举三重查找并存：前置门 + 兜底（审查意见，评估后拒绝）
+
+`findUnknown*Enum`（启动前置门，触碰文件系统前具名拒绝）与 `parseEnumValue` 的 `requireNotNull`（门被绕过时的 fail-loud 兜底）是纵深防御而非冗余；两个 `findUnknown*` 是各自领域的字段清单（聚合 arity 不同）而非重复代码，抽通用 helper 不减少新增字段的触碰点。备选方案"`start()` 捕获 IllegalArgumentException → PARAM"被否：`setUsage` 传 system usage（1000-1004）必然抛 IAE（设备不支持 ≠ 配置拼错），全局映射混淆两类失败，且丢失"触碰文件系统前拒绝"的时序保证。同方向决策见 §9。
+
+## 14. 重载守卫的 ALREADY_ACTIVE 弹窗语义失准（不可达防御分支）
+
+`AudioViewModel.reloadConfigurations` 的 ACTIVE/STARTING 守卫弹 "…is already in progress."，不直接回答"重载怎么了"（准确文案 "Cannot reload configuration while active" 在 `statusMessage`，且被弹窗遮住）。但该分支实际不可达：`_state` 的 LiveData `setValue` 在主线程同步派发，spinner 在 STARTING/ACTIVE 同一时刻被禁用，禁用的 View 不派发长按，而长按是 `reloadConfigurations` 唯一生产入口。守卫是 `2b87c48` 特意加的回归防线，保留；为死分支改文案或加机制收益为零。
+
+## 15. release 期 FINALIZE 错误就地直报，不走 handleError（审查意见，评估后拒绝）
+
+`AudioRecorder.releaseAudioResources` 直接 `engineListener?.onError(FINALIZE, ...)` 并自带 `state != AudioState.ERROR` 抑制，依赖"先 onError 后 onStopped"的跨文件顺序不变量（两端注释 + `AudioViewModel.onStopped` 守卫锚定）。拒绝理由：全库仅此一个可终结资源（播放器 `wavFile?.close()` 不上报失败），抽 `reportReleaseError` helper 不消除两端契约、净行数为零；且若走 `handleError` 会重入 `releaseAudioResources`（此时 `wavFile` 尚未置 null），就地直报恰好绕开该递归。
