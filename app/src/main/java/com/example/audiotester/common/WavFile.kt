@@ -31,6 +31,9 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
     private var fileInputStream: InputStream? = null
     private var fileOutputStream: FileOutputStream? = null
 
+    /** A close already failed to patch the header; replayed so later close() calls report the broken file */
+    private var finalizeFailed = false
+
     /** Bytes left in the declared data chunk (read side); reset by [close] */
     var remainingData = 0L
         private set
@@ -263,6 +266,10 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
      * header-only empty WAV. The patch runs even when the stream close itself failed (the data
      * body is already on disk; FileOutputStream never buffers). Returns whether both succeeded.
      *
+     * Later close() calls replay the remembered result instead of reporting blind success:
+     * after the internal close-on-failure in writeAudioData, out is already null here, and a
+     * plain true would swallow the broken header from the caller's final release-time check.
+     *
      * Synchronized with readData/writeAudioData: engine stop() closes the WAV from the engine
      * thread while the run loop may still be mid-write/read on its own thread — the monitor
      * serializes them, so the header always counts every accepted write (the writer's internal
@@ -286,9 +293,9 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
         // the delete must follow close (the handle must be gone on Windows), and the patch
         // must not be skipped by a failed close
         val finalized = when {
-            out == null -> true // read side: nothing to patch
+            out == null -> !finalizeFailed // read side, or replay of an earlier failed patch
             dataLength == 0L -> { File(filePath).delete(); true }
-            else -> updateWavHeader()
+            else -> updateWavHeader().also { if (!it) finalizeFailed = true }
         }
         return closed && finalized
     }

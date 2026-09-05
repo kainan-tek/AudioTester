@@ -440,6 +440,20 @@ class WavFileTest {
     }
 
     @Test
+    fun close_failedHeaderPatch_isReplayedByLaterCloses() {
+        // The recorder's final release-time close is a no-op replay (stream already closed by
+        // the internal close-on-failure); it must return the remembered failure, not a blind
+        // true that would swallow the broken-header error from the caller
+        val file = File(tempFolder.root, "replay.wav")
+        val writer = WavFile(file.absolutePath)
+        assertTrue(writer.create(8000, 2, 16))
+        assertTrue(writer.writeAudioData(ByteArray(100), 0, 100))
+        assertTrue(file.setReadOnly())   // RandomAccessFile("rw") in the header patch now fails
+        assertFalse(writer.close())      // patch failure surfaced on the closing call
+        assertFalse(writer.close())      // replayed, not silently converted to success
+    }
+
+    @Test
     fun openTruncatedExtensible_failsCleanly() {
         // fmt declares 16 bytes but tag=0xFFFE (EXTENSIBLE without the GUID): must fail cleanly rather than throw AIOOBE
         val data = ByteArray(8)
