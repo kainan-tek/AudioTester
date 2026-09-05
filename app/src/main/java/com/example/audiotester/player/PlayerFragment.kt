@@ -42,7 +42,7 @@ class PlayerFragment : AudioTestFragment() {
         "Current Config: ${config.description}\n" +
             "Usage: ${config.usage} | ${config.contentType}\n" +
             "Mode: ${config.performanceMode}\n" +
-            "File: ${config.audioFilePath.ifEmpty { "Bundled sample (${AudioConstants.DEFAULT_AUDIO_FILE})" }}"
+            "File: ${if (config.hasUsableFilePath) config.audioFilePath else "Bundled sample (${AudioConstants.DEFAULT_AUDIO_FILE})"}"
 
     override fun friendlyMessage(type: AudioErrorType): String = when (type) {
         AudioErrorType.FILE ->
