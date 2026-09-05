@@ -3,12 +3,14 @@ package com.example.audiotester.common
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.io.FileInputStream
+import java.io.IOException
 import java.io.InputStream
 import java.util.concurrent.CountDownLatch
 
@@ -87,6 +89,69 @@ class WavFileTest {
         assertTrue(reader.open())
         assertEquals(60, reader.readData(ByteArray(100), 0, 100))
         assertEquals(-1, reader.readData(ByteArray(100), 0, 100))
+        // The player's truncation detector keys on this: declared data was not exhausted
+        assertTrue(reader.hasUnreadDeclaredData)
+        reader.close()
+    }
+
+    /** Serves at most 256 bytes per read (short reads force readData into its loop), failing once [failAfter] bytes are gone */
+    private class MidReadFailureStream(private val source: InputStream, private val failAfter: Long) : InputStream() {
+        private var served = 0L
+        override fun read(): Int = throw IOException("unsupported single-byte read")
+        override fun read(buffer: ByteArray, off: Int, len: Int): Int {
+            if (served >= failAfter) throw IOException("simulated mid-read failure")
+            val n = source.read(buffer, off, minOf(len, 256))
+            if (n > 0) served += n
+            return n
+        }
+    }
+
+    @Test
+    fun readData_midFileIoError_propagatesInsteadOfMimickingEof() {
+        // A transient IO failure halfway through must reach the caller as an exception —
+        // returning -1 here would report the truncated playback as a clean end
+        val file = File(tempFolder.root, "ioerror.wav")
+        val writer = WavFile(file.absolutePath)
+        assertTrue(writer.create(48000, 2, 16))
+        assertTrue(writer.writeAudioData(ByteArray(4000), 0, 4000))
+        assertTrue(writer.close())
+
+        val reader = WavFile(file.absolutePath)
+        assertTrue(reader.open(MidReadFailureStream(FileInputStream(file), failAfter = 600)))
+        assertThrows(IOException::class.java) { reader.readData(ByteArray(4000), 0, 4000) }
+        reader.close()
+    }
+
+    @Test
+    fun streamingWav_placeholderDataSize_isNotReadAsTruncation() {
+        // data size 0xFFFFFFFF = streaming "unknown length" placeholder: reading stops at real
+        // EOF with remainingData still huge — hasUnreadDeclaredData must stay false so the
+        // player reports a clean end instead of a false truncation error
+        val data = ByteArray(16) { it.toByte() }
+        val header = ByteArray(44).also { h ->
+            "RIFF".toByteArray().copyInto(h, 0)
+            h.putLeInt(4, 36)                 // riff size as if data were empty
+            "WAVE".toByteArray().copyInto(h, 8)
+            "fmt ".toByteArray().copyInto(h, 12)
+            h.putLeInt(16, 16)                // fmt chunk size
+            h.putLeShort(20, 1)               // PCM
+            h.putLeShort(22, 2)               // channels
+            h.putLeInt(24, 48000)             // sample rate
+            h.putLeInt(28, 48000 * 2 * 2)     // byte rate
+            h.putLeShort(32, 4)               // block align
+            h.putLeShort(34, 16)              // bits per sample
+            "data".toByteArray().copyInto(h, 36)
+            h.putLeInt(40, -1)                // 0xFFFFFFFF: streaming placeholder
+        }
+        val file = File(tempFolder.root, "streaming.wav")
+        file.writeBytes(header + data)
+
+        val reader = WavFile(file.absolutePath)
+        assertTrue(reader.open())
+        assertEquals(16, reader.readData(ByteArray(100), 0, 100))
+        assertEquals(-1, reader.readData(ByteArray(100), 0, 100))
+        assertTrue(reader.remainingData > 0)
+        assertFalse(reader.hasUnreadDeclaredData)
         reader.close()
     }
 

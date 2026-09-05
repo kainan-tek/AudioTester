@@ -304,6 +304,16 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                 }
 
                 if (state == AudioState.ACTIVE) {
+                    // A mid-file IO error throws out of readData (→ catch below → [STREAM]); a
+                    // file that ends before its declared data size (truncated copy / lying
+                    // header) is a file-content problem — fail loudly as [FILE] instead of
+                    // reporting a partial playback as success
+                    if (readLoopEnded && wavFile.hasUnreadDeclaredData) {
+                        handleLoopError(
+                            session,
+                            "${AudioConstants.ErrorTypes.FILE} audio data ended ${wavFile.remainingData} bytes short of the declared size")
+                        return@launch
+                    }
                     // On a natural end (EOF), stop() would discard the frames still buffered in
                     // the track, cutting off the tail. Poll playbackHeadPosition until drained,
                     // then stop, so the entire audio is heard.

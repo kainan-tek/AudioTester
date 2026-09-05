@@ -30,7 +30,14 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
 
     private var fileInputStream: InputStream? = null
     private var fileOutputStream: FileOutputStream? = null
-    private var remainingData = 0L
+
+    /** Bytes left in the declared data chunk (read side); reset by [close] */
+    var remainingData = 0L
+        private set
+
+    /** True while a real-length data chunk still has unread bytes; 0xFFFFFFFF is the streaming "unknown size" placeholder, not a truncation */
+    val hasUnreadDeclaredData: Boolean
+        get() = remainingData > 0 && dataLength != 0xFFFFFFFFL
 
     var sampleRate: Int = 0
         private set
@@ -175,6 +182,11 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
         }
     }
 
+    /**
+     * Returns -1 for a clean end of data; IO errors propagate to the caller (a mid-file read
+     * failure must not masquerade as EOF). The stream stays open on error — cleanup belongs to
+     * the caller (the player's releaseAudioResources closes it on the error path).
+     */
     @Synchronized
     fun readData(buffer: ByteArray, offset: Int, length: Int): Int {
         val stream = fileInputStream ?: return -1
@@ -182,22 +194,16 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
         if (remainingData <= 0) return -1
         // Stay within the data chunk to avoid reading trailing metadata chunks
         val toRead = minOf(length.toLong(), remainingData).toInt()
-        return try {
-            // Loop until the block is complete: InputStream.read may return fewer bytes than
-            // requested, and the player relies on frame-aligned blocks
-            var total = 0
-            while (total < toRead) {
-                val n = stream.read(buffer, offset + total, toRead - total)
-                if (n < 0) break
-                total += n
-            }
-            remainingData -= total
-            if (total > 0) total else -1
-        } catch (e: IOException) {
-            Log.e(TAG, "Failed to read data", e)
-            close()
-            -1
+        // Loop until the block is complete: InputStream.read may return fewer bytes than
+        // requested, and the player relies on frame-aligned blocks
+        var total = 0
+        while (total < toRead) {
+            val n = stream.read(buffer, offset + total, toRead - total)
+            if (n < 0) break
+            total += n
         }
+        remainingData -= total
+        return if (total > 0) total else -1
     }
 
     val channelDescription: String
