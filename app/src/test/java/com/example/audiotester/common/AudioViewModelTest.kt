@@ -192,6 +192,33 @@ class AudioViewModelTest {
         assertEquals(applied, engine.currentConfig)
     }
 
+    /** Start before the initial config load lands must be refused: the engine would silently
+     *  run on the built-in default while the UI claims configs[0] (UI/engine desync) */
+    @Test
+    fun `start before initial config load lands is refused`() = runTest(testDispatcher.scheduler) {
+        // Fresh ViewModel on the same scheduler: its load coroutine is queued but not run,
+        // so _availableConfigs is still null (setUp's advance only drained the setUp VM)
+        val fresh = AudioViewModel(
+            Mockito.mock(Application::class.java),
+            engine,
+            "player",
+            AudioMessages("ready", "preparing", "active", "stopped", "failed"),
+            testDispatcher,
+        )
+
+        fresh.start()           // must hit the not-loaded guard, before any state mutation
+        assertEquals(AudioState.IDLE, fresh.state.value)
+        assertEquals("Configuration loading, please wait", fresh.statusMessage.value)
+
+        advanceUntilIdle()      // initial load lands; configs[0] is now applied to the engine
+        fresh.start()
+        advanceUntilIdle()
+        engine.fireOnStarted()
+        advanceUntilIdle()
+
+        assertEquals(AudioState.ACTIVE, fresh.state.value)
+    }
+
     /** Foreground failure: the fragment consumes the error (dialog + clearError → IDLE); the
      *  start-failure backstop must not re-enter ERROR and strand a messageless terminal error */
     @Test

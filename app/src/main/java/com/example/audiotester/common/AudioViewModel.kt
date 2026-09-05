@@ -96,6 +96,14 @@ class AudioViewModel(
     /** Must be called on the main thread (writes LiveData directly) */
     fun start() {
         if (_state.value == AudioState.ACTIVE || _state.value == AudioState.STARTING) return
+        // Refuse before the initial async config load lands: the engine would silently run on
+        // the built-in default while the spinner shows configs[0], and the load's setAudioConfig
+        // (rejected as ACTIVE) would permanently desync UI and engine. loadConfigs always
+        // completes (failures fall back to emergency defaults), so this cannot wedge Start
+        if (_availableConfigs.value == null) {
+            _statusMessage.value = "Configuration loading, please wait"
+            return
+        }
         stopRequested = false
         _errorMessage.value = null
         _state.value = AudioState.STARTING
