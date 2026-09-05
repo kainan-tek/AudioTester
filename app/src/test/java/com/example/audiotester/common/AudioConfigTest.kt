@@ -107,12 +107,21 @@ class AudioConfigTest {
     }
 
     @Test
-    fun invalidNumberValue_fallsBackToDefault() {
+    fun invalidNumberValue_skipsOnlyThatEntry() {
+        // A present-but-unparseable number throws (named in the message) → runCatching skips
+        // only that entry, the same loud treatment as an out-of-range bufferMultiplier
         val configs = AudioConfig.parseConfigs(
-            stream("""<audioConfigs><player><config><sampleRate>abc</sampleRate></config></player></audioConfigs>"""),
-            "player"
+            stream("""
+                <audioConfigs>
+                  <player>
+                    <config><sampleRate>abc</sampleRate><description>bad</description></config>
+                    <config><description>ok</description></config>
+                  </player>
+                </audioConfigs>
+            """.trimIndent()), "player"
         )
-        assertEquals(48000, configs[0].sampleRate)
+        assertEquals(1, configs.size)
+        assertEquals("ok", configs[0].description)
     }
 
     @Test

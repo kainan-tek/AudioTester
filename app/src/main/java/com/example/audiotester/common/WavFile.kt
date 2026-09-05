@@ -9,12 +9,10 @@ import java.io.InputStream
 import java.io.RandomAccessFile
 
 /**
- * Unified WAV file read/write utility.
- * Read side: open(file/InputStream) + readData; write side: create + writeAudioData + close (patches the header back).
- * Read/write implementations are fundamentally different, so they are separated by responsibility;
- * shared fields: sampleRate/channelCount/bitsPerSample, while byteRate/blockAlign are computed
- * properties and dataLength unifies duration calculation between header-parsed (read) and
- * accumulated (write) values.
+ * Unified WAV read/write utility: read side (open + readData) and write side (create +
+ * writeAudioData + close/patch) are fundamentally different and stay separated. Shared fields:
+ * sampleRate/channelCount/bitsPerSample; byteRate/blockAlign are computed; dataLength unifies
+ * duration between header-parsed (read) and accumulated (write) values.
  */
 class WavFile(private val filePath: String, private val maxDataBytes: Long = Int.MAX_VALUE - 36L) {
 
@@ -124,9 +122,8 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
                             }
                             audioFormat = readLittleEndianShort(fmt, 24)
                             // wValidBitsPerSample (fmt[18]) is intentionally not read: the spec
-                            // left-justifies valid bits in the container, so playing by the container
-                            // size is level-correct; relabeling to the valid depth would misalign
-                            // the container-sized frames into noise
+                            // left-justifies valid bits in the container, so playing by the
+                            // container size is level-correct; relabeling would misalign frames
                         }
                     }
                     "data" -> {
@@ -263,8 +260,10 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
     /**
      * Closes the streams, then finalizes the write side: header sizes patched back — except a
      * session that produced no audio data at all: its file is deleted instead of shipping a
-     * header-only empty WAV. The patch runs even when the stream close itself failed (the data
-     * body is already on disk; FileOutputStream never buffers). Returns whether both succeeded.
+     * header-only empty WAV. Returns whether the file is valid (header patched, or the empty
+     * file deleted), not whether the stream close succeeded: the body is already on disk
+     * (FileOutputStream never buffers) and a successful patch itself proves readability, so
+     * counting a failed close would flag a valid recording as unreadable.
      *
      * Later close() calls replay the remembered result instead of reporting blind success:
      * after the internal close-on-failure in writeAudioData, out is already null here, and a
@@ -278,26 +277,23 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
     @Synchronized
     fun close(): Boolean {
         val out = fileOutputStream
-        val closed = try {
+        try {
             if (out == null) fileInputStream?.close() else out.close()
-            true
         } catch (e: IOException) {
             Log.e(TAG, "Error closing WAV file", e)
-            false
         } finally {
             fileOutputStream = null
             fileInputStream = null
             remainingData = 0
         }
-        // Finalization runs after the streams are handled and regardless of how they ended:
-        // the delete must follow close (the handle must be gone on Windows), and the patch
-        // must not be skipped by a failed close
+        // Finalization runs regardless of how the close ended: the delete must follow close
+        // (the handle must be gone on Windows), and the patch must not be skipped by it
         val finalized = when {
             out == null -> !finalizeFailed // read side, or replay of an earlier failed patch
             dataLength == 0L -> { File(filePath).delete(); true }
             else -> updateWavHeader().also { if (!it) finalizeFailed = true }
         }
-        return closed && finalized
+        return finalized
     }
 
     // ===== Header and validation =====
@@ -364,8 +360,8 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
     private fun readLittleEndianShort(bytes: ByteArray, offset: Int): Int =
         (bytes[offset].toInt() and 0xFF) or ((bytes[offset + 1].toInt() and 0xFF) shl 8)
 
-    // offset keeps the LE-helper family's signature uniform (the short/write variants all take it,
-    // with varied offsets); both current call sites read offset 4 (RIFF size, fmt sampleRate)
+    // offset keeps the LE-helper family's signature uniform; both call sites read offset 4
+    // (RIFF size, fmt sampleRate)
     @Suppress("SameParameterValue")
     private fun readLittleEndianInt(bytes: ByteArray, offset: Int): Int =
         (bytes[offset].toInt() and 0xFF) or

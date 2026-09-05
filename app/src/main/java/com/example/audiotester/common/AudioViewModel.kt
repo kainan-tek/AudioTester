@@ -84,8 +84,10 @@ class AudioViewModel(
                     _currentConfig.value = engine.setAudioConfig(newConfig)
                     _statusMessage.value = "Configuration reloaded successfully: ${configs.size} configs"
                 } else {
+                    // No dialog: an empty file is not an "invalid configuration" — the status
+                    // bar carries the accurate diagnosis (PARAM would misdescribe it and offer
+                    // picking from the stale, unrefreshed list)
                     _statusMessage.value = "Configuration file is empty or format error"
-                    _errorMessage.value = AudioErrorType.PARAM
                 }
             }
         }
@@ -103,7 +105,12 @@ class AudioViewModel(
             val success = engine.start()
             if (!success) {
                 updateUI {
-                    if (_state.value != AudioState.ERROR) {
+                    // Backstop for a `false` without any onError (engine contract violation):
+                    // nothing was reported, so un-wedging STARTING into a messageless ERROR is
+                    // correct here. When an error WAS reported, it was already consumed (dialog
+                    // + clearError → IDLE) or sits undelivered in ERROR — re-setting ERROR would
+                    // strand a terminal ERROR with a null message (consume-on-delivery invariant)
+                    if (_state.value == AudioState.STARTING) {
                         _state.value = AudioState.ERROR
                         _statusMessage.value = messages.failed
                     }
@@ -122,10 +129,9 @@ class AudioViewModel(
 
     /** Must be called on the main thread (writes LiveData directly); spinner callback is the only production caller */
     fun setAudioConfig(config: AudioConfig) {
-        // Describe what the engine actually applied, not what was requested: a rejected
-        // (ACTIVE) request returns the previous config, and the status must not claim
-        // the rejected one took effect. Same main-thread-direct style as start/stop —
-        // no updateUI hop for a call that is already on the main thread
+        // Describe what the engine actually applied, not what was requested: a rejected (ACTIVE)
+        // request returns the previous config, and the status must not claim it took effect.
+        // Same main-thread-direct style as start/stop — no updateUI hop for a call already there
         val applied = engine.setAudioConfig(config)
         _currentConfig.value = applied
         _statusMessage.value = "Configuration updated: ${applied.description}"

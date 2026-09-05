@@ -30,6 +30,8 @@ class AudioViewModelTest {
         var stopCalled = false
         /** Mirrors the recorder's finalize failure: the error is reported during stop(), before the onStopped confirmation */
         var failRelease = false
+        /** Mirrors the engines' start-failure contract: handleError (onError) before returning false */
+        var failStart = false
         private var active = false
         private var listener: AudioEngine.Listener? = null
 
@@ -44,6 +46,10 @@ class AudioViewModelTest {
         override fun start(): Boolean {
             if (active) {
                 listener?.onError(AudioErrorType.ALREADY_ACTIVE, "Already playing")
+                return false
+            }
+            if (failStart) {
+                listener?.onError(AudioErrorType.STREAM, "start failed")
                 return false
             }
             active = true
@@ -184,5 +190,32 @@ class AudioViewModelTest {
         assertEquals(AudioState.IDLE, viewModel.state.value)
         assertEquals(applied, viewModel.currentConfig.value)
         assertEquals(applied, engine.currentConfig)
+    }
+
+    /** Foreground failure: the fragment consumes the error (dialog + clearError → IDLE); the
+     *  start-failure backstop must not re-enter ERROR and strand a messageless terminal error */
+    @Test
+    fun `failed start consumed by the UI does not re-enter ERROR`() = runTest(testDispatcher.scheduler) {
+        engine.failStart = true
+        // Mirror the fragment's consume-on-delivery contract (AudioTestFragment: dialog + clearError)
+        viewModel.errorMessage.observeForever { type -> type?.let { viewModel.clearError() } }
+
+        viewModel.start()
+        advanceUntilIdle()
+
+        assertEquals(AudioState.IDLE, viewModel.state.value)
+        assertEquals(null, viewModel.errorMessage.value)
+    }
+
+    /** Backgrounded failure: no active observer consumed the error; it must survive pending until delivery */
+    @Test
+    fun `failed start not yet consumed keeps the error pending`() = runTest(testDispatcher.scheduler) {
+        engine.failStart = true
+
+        viewModel.start()
+        advanceUntilIdle()
+
+        assertEquals(AudioState.ERROR, viewModel.state.value)
+        assertEquals(AudioErrorType.STREAM, viewModel.errorMessage.value)
     }
 }

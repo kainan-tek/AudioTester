@@ -55,14 +55,14 @@ class AudioEngineBaseTest {
             return startResult
         }
 
-        /** Token visible during initializeAudio: focus setup happens here in real engines, so it
-         *  must already be the token this start will commit — otherwise every focus-loss stop
-         *  carries a stale token and is a permanent no-op */
+        /** Token visible during initializeAudio: real engines capture focus callbacks here, so
+         *  it must already be the token this start commits — else focus-loss stops carry a
+         *  stale token and are permanent no-ops */
         var tokenSeenByInitializeAudio: Int = -1
             private set
 
-        override fun initializeAudio(): Boolean {
-            tokenSeenByInitializeAudio = currentSession
+        override fun initializeAudio(session: Int): Boolean {
+            tokenSeenByInitializeAudio = session
             return true
         }
         override fun releaseAudioResources() { releaseCount.incrementAndGet() }
@@ -221,8 +221,8 @@ class AudioEngineBaseTest {
 
     /**
      * Stale-loop invariant: a loop cancelled by stop() keeps unwinding (blocking IO is not
-     * interruptible) and may do so after a newer session already committed. The stale loop
-     * must neither stop the engine nor report its error into the new session.
+     * interruptible) and may do so after a newer session committed — it must neither stop the
+     * engine nor report its error into the new session.
      */
     @Test
     fun staleLoopError_afterRestart_spareNewSession() {

@@ -32,14 +32,12 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
 
     override val tag: String get() = TAG
 
-    // @Volatile on the loop-read fields (audioTrack/wavFile): same reasoning as AudioRecorder —
-    // launch() publishes only the initial values, the stop-path nulling needs its own guarantee.
-    // audioManager/audioFocusRequest are engine-thread-only, the loop never reads them
-    @Volatile
+    // Engine-lock-confined: every read/write happens under the engine lock; the run loop works
+    // on locals captured in startLoop (see there). audioManager/audioFocusRequest the loop
+    // never touches at all
     private var audioTrack: AudioTrack? = null
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
-    @Volatile
     private var wavFile: WavFile? = null
 
     override val alreadyActiveMessage = "Already playing"
@@ -108,7 +106,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
         return true
     }
 
-    override fun initializeAudio(): Boolean {
+    override fun initializeAudio(session: Int): Boolean {
         val wavFile = wavFile ?: return false
 
         // Every failure path funnels through handleError → releaseAudioResources, which already
@@ -118,7 +116,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
             val audioAttributes =
                 AudioConstants.buildAudioAttributes(currentConfig.usage, currentConfig.contentType)
 
-            if (!requestAudioFocus(audioAttributes)) {
+            if (!requestAudioFocus(audioAttributes, session)) {
                 handleError(AudioErrorType.FOCUS, "Cannot obtain audio focus")
                 return false
             }
@@ -175,7 +173,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
         return true
     }
 
-    private fun requestAudioFocus(audioAttributes: AudioAttributes): Boolean {
+    private fun requestAudioFocus(audioAttributes: AudioAttributes, session: Int): Boolean {
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
         // System usages (>= 1000) are vehicle-critical audio and do not rely on regular focus
@@ -183,14 +181,12 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
         // (SDK usages are always < 1000; this check only affects Usage.SYSTEM_MAP configs)
         if (AudioConstants.isSystemUsage(currentConfig.usage)) return true
 
-        // Bind the focus callbacks to this session: this runs under the engine lock during
-        // start(), so a queued focus-loss stop can never land on a newer session
-        val mySession = currentSession
-
+        // Bind the focus callbacks to this session: initializeAudio runs under the engine lock
+        // during start(), so a queued focus-loss stop can never land on a newer session
         val focusType = determineFocusType()
 
         val focusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
-            handleFocusChange(focusChange, mySession)
+            handleFocusChange(focusChange, session)
         }
 
         val request = AudioFocusRequest.Builder(focusType).setAudioAttributes(audioAttributes)
@@ -238,13 +234,14 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
     }
 
     override fun startLoop(session: Int) {
+        // Same-thread capture under the engine lock — the why lives in the startLoop contract
+        // (AudioEngineBase); a stop landing before the body runs is absorbed by handleLoopError
+        val wavFile = wavFile ?: error("Engine contract violation: null resources in startLoop")
+        val audioTrack = audioTrack ?: error("Engine contract violation: null resources in startLoop")
         loopJob = loopScope.launch {
             // Everything after launch is inside the try: a stop landing mid-prologue releases the
             // audio objects concurrently, so even buffer setup must funnel through handleLoopError
             try {
-                val wavFile = wavFile ?: return@launch
-                val audioTrack = audioTrack ?: return@launch
-
                 val bytesPerFrame = wavFile.blockAlign
                 val audioTrackBufferSize = audioTrack.bufferSizeInFrames * bytesPerFrame
                 val rawWriteBufferSize =
@@ -253,10 +250,9 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                         AudioTrack.PERFORMANCE_MODE_POWER_SAVING -> audioTrackBufferSize / 2
                         else -> audioTrackBufferSize / 3
                     }
-                // Round down to a whole number of frames: write() only consumes whole frames
-                // (userSize >= mFrameSize loop); a leftover partial frame can never be written and
-                // returns 0; non-frame-aligned blocks would drop bytes every block and shift all
-                // subsequent data into noise
+                // Round down to whole frames: write() only consumes whole frames; a leftover
+                // partial frame can never be written (returns 0) and non-frame-aligned blocks
+                // would drop bytes every block, shifting all subsequent data into noise
                 val writeBufferSize = rawWriteBufferSize / bytesPerFrame * bytesPerFrame
 
                 val buffer = ByteArray(writeBufferSize)
@@ -283,16 +279,15 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                         break
                     }
 
-                    // The blocking write()'s internal drain loop either consumes all whole
-                    // frames or errors out (partial success is always followed by an error
-                    // code). Treat a short write as an exception — fail loudly to expose platform issues
+                    // The blocking write()'s internal drain loop either consumes all whole frames
+                    // or errors out (partial success is always followed by an error code) — treat
+                    // a short write as an exception and fail loudly to expose platform issues
                     val bytesWritten = audioTrack.write(buffer, 0, alignedBytes)
                     if (bytesWritten != alignedBytes) {
                         throw IOException("AudioTrack write incomplete: $bytesWritten/$alignedBytes")
                     }
-                    // Accumulate before the partial-tail break: these frames are already queued
-                    // in the track, and the drain below must wait for all of them, not stop
-                    // one write-buffer early and let audioTrack.stop() cut off the tail
+                    // Accumulate before the partial-tail break: these frames are queued in the
+                    // track, and the drain below must wait for all of them
                     totalBytes += bytesWritten
                     if (alignedBytes != bytesRead) {
                         readLoopEnded = true   // partial tail = end of data; drain and stop below
@@ -308,8 +303,8 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                 if (state == AudioState.ACTIVE) {
                     // A mid-file IO error throws out of readData (→ catch below → [STREAM]); a
                     // file that ends before its declared data size (truncated copy / lying
-                    // header) is a file-content problem — fail loudly as [FILE] instead of
-                    // reporting a partial playback as success
+                    // header) is a file-content problem — fail loudly as [TRUNCATED], not as
+                    // a partial-playback success
                     if (readLoopEnded && wavFile.hasUnreadDeclaredData) {
                         handleLoopError(
                             session,
@@ -317,14 +312,13 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                             "audio data ended ${wavFile.remainingData} bytes short of the declared size")
                         return@launch
                     }
-                    // On a natural end (EOF), stop() would discard the frames still buffered in
-                    // the track, cutting off the tail. Poll playbackHeadPosition until drained,
-                    // then stop, so the entire audio is heard.
+                    // On a natural end (EOF), stop() would discard frames still buffered in the
+                    // track, cutting off the tail — poll playbackHeadPosition until drained
+                    // (10ms steps), then stop, so the entire audio is heard
                     if (readLoopEnded) {
                         val framesWritten = totalBytes / bytesPerFrame
-                        // Drain time is at most the track buffer duration (on devices with a large
-                        // minBufferSize this can be seconds); scale the deadline by the buffer
-                        // duration + 2s margin to guard against a stuck HAL; 10ms polling is enough
+                        // Deadline = track buffer duration (seconds on devices with a large
+                        // minBufferSize) + 2s margin against a stuck HAL
                         val drainMs = audioTrack.bufferSizeInFrames * 1000L / wavFile.sampleRate
                         val deadline = SystemClock.elapsedRealtime() + drainMs + 2000
                         while (isActive && state == AudioState.ACTIVE &&

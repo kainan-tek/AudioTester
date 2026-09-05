@@ -26,12 +26,9 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
 
     override val tag: String get() = TAG
 
-    // @Volatile: the run loop reads these on its own thread while stop()/release() null them
-    // under the engine lock — launch() publishes only the initial values, not the stop-path
-    // writes (cancel() runs before the nulling, so its sync edge points the wrong way)
-    @Volatile
+    // Engine-lock-confined: every read/write happens under the engine lock; the run loop works
+    // on locals captured in startLoop (see there)
     private var audioRecord: AudioRecord? = null
-    @Volatile
     private var wavFile: WavFile? = null
 
     override val alreadyActiveMessage = "Already recording"
@@ -115,7 +112,8 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
         }
     }
 
-    override fun initializeAudio(): Boolean {
+    override fun initializeAudio(session: Int): Boolean {
+        // session unused: the recorder has no session-scoped callbacks to bind
         return try {
             val minBufferSize = AudioRecord.getMinBufferSize(
                 currentConfig.sampleRate,
@@ -179,13 +177,14 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
     }
 
     override fun startLoop(session: Int) {
+        // Same-thread capture under the engine lock — the why lives in the startLoop contract
+        // (AudioEngineBase); a stop landing before the body runs is absorbed by handleLoopError
+        val audioRecord = audioRecord ?: error("Engine contract violation: null resources in startLoop")
+        val wavFile = wavFile ?: error("Engine contract violation: null resources in startLoop")
         loopJob = loopScope.launch {
             // Everything after launch is inside the try: a stop landing mid-prologue releases the
             // audio objects concurrently, so even buffer setup must funnel through handleLoopError
             try {
-                val audioRecord = audioRecord ?: return@launch
-                val wavFile = wavFile ?: return@launch
-
                 // bufferSizeInFrames / 3 keeps the read buffer a whole number of frames: a read
                 // returning a partial frame would shift every block written to the WAV into
                 // misaligned noise (the player rounds its write buffer the same way)

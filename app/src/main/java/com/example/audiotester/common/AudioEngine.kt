@@ -30,7 +30,7 @@ interface AudioEngine {
 
 /**
  * Unified audio state enum (former PlayerState / RecorderState had identical structure, merged).
- * STARTING is ViewModel-side only: start requested but not yet committed (the engine jumps
+ * STARTING is ViewModel-side only: start requested but not committed (the engine jumps
  * IDLE → ACTIVE synchronously under its lock and never reports it).
  */
 enum class AudioState { IDLE, STARTING, ACTIVE, ERROR }
@@ -63,13 +63,10 @@ abstract class AudioEngineBase : AudioEngine {
     /**
      * Session token, incremented under the engine lock at each start commit. Loop-side callers
      * (run loop, focus-loss callback) capture their own token and pass it back on stop/error;
-     * the compare+act under the engine lock makes a stale caller a no-op instead of landing
-     * on a newer session.
+     * the compare+act under the lock makes a stale caller a no-op instead of landing on a
+     * newer session.
      */
     private var session = 0
-
-    /** Current session token; read under the engine lock to bind callbacks to this session (e.g. focus setup during start) */
-    protected val currentSession: Int get() = session
 
     protected val loopScope = CoroutineScope(Dispatchers.IO)
     protected var loopJob: Job? = null
@@ -79,8 +76,8 @@ abstract class AudioEngineBase : AudioEngine {
     }
 
     /**
-     * The single copy of the start state machine: guards → open → initialize → commit →
-     * notify. Subclasses provide resource-specific hooks and texts; always under the engine lock.
+     * The single copy of the start state machine: guards → open → initialize → commit → notify.
+     * Subclasses provide resource-specific hooks and texts; always under the engine lock.
      */
     @Synchronized
     final override fun start(): Boolean {
@@ -100,7 +97,7 @@ abstract class AudioEngineBase : AudioEngine {
             // attempt burns a token — harmless, only uniqueness matters.
             session += 1
             if (!openResources()) return false
-            if (!initializeAudio()) return false
+            if (!initializeAudio(session)) return false
             state = AudioState.ACTIVE
             startLoop(session)
             engineListener?.onStarted()
@@ -118,15 +115,20 @@ abstract class AudioEngineBase : AudioEngine {
     /** Subclass: open the session's file/resource; report failures via handleError, return false */
     protected abstract fun openResources(): Boolean
 
-    /** Subclass: build the AudioTrack/AudioRecord; report failures via handleError, return false */
-    protected abstract fun initializeAudio(): Boolean
+    /** Subclass: build the AudioTrack/AudioRecord; report failures via handleError, return false.
+     *  [session] is the token this start will commit — bind session-scoped callbacks (focus
+     *  loss) to it here, while the engine lock is held */
+    protected abstract fun initializeAudio(session: Int): Boolean
 
-    /** Subclass: launch the run loop on loopScope (assign loopJob); the loop captures [session] as its own token */
+    /** Subclass: launch the run loop on loopScope (assign loopJob); the loop captures [session] as its own token.
+     *  Called under the engine lock with the session's resources live: capture them into locals
+     *  before launch — same-thread capture plus launch() publication keep the fields lock-confined
+     *  (no @Volatile), and a stop landing before the body runs surfaces as an IllegalStateException
+     *  on the released objects, absorbed by handleLoopError's guard */
     protected abstract fun startLoop(session: Int)
 
-    // Synchronized: start() reads currentConfig piecemeal (openResources → initializeAudio →
-    // startLoop); a config swap must not interleave with an in-flight start. Under the engine
-    // lock it parks until start commits, then the ACTIVE guard rejects it.
+    // Synchronized: start() reads currentConfig piecemeal, so a config swap must not interleave
+    // with an in-flight start; under the lock it parks until start commits, then ACTIVE rejects it.
     @Synchronized
     override fun setAudioConfig(config: AudioConfig): AudioConfig {
         if (state == AudioState.ACTIVE) {
@@ -177,8 +179,8 @@ abstract class AudioEngineBase : AudioEngine {
 
     /**
      * Run-loop failure carrying the loop's own [expected] session token; a stale caller is a
-     * no-op (see [session]). Cancellation never false-errors either: stop()/release() set IDLE
-     * under the lock before cancelling, so a cancelled loop never sees matching token + ACTIVE.
+     * no-op. Cancellation never false-errors either: stop()/release() set IDLE under the lock
+     * before cancelling, so a cancelled loop never sees matching token + ACTIVE.
      */
     @Synchronized
     protected fun handleLoopError(expected: Int, type: AudioErrorType, detail: String) {

@@ -13,8 +13,8 @@ import org.mockito.Mockito
 
 /**
  * Unknown enum strings in the config (typos in usage/contentType/performanceMode/audioSource)
- * must fail the start with a [PARAM] error naming the typo. The old fallback silently played
- * / recorded with the default constant instead — a test tool must not look successful while
+ * must fail start with a [PARAM] error naming the typo — the old fallback silently played
+ * / recorded with the default constant, a test tool must not look successful while
  * measuring the wrong attributes.
  */
 class EngineEnumValidationTest {

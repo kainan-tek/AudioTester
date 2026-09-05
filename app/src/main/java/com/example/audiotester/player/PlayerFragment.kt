@@ -38,11 +38,16 @@ class PlayerFragment : AudioTestFragment() {
     override fun permissionsForCurrentConfig(): Array<String> =
         if (viewModel.currentConfig.value?.hasUsableFilePath != false) storagePermissions() else emptyArray()
 
-    override fun formatInfo(config: AudioConfig): String =
-        "Current Config: ${config.description}\n" +
+    override fun formatInfo(config: AudioConfig): String {
+        // Mirror the engine's three-way dispatch (empty → default asset, asset:// → that asset,
+        // else file) so the panel always names the file actually played
+        val path = config.audioFilePath.ifEmpty { AudioConstants.DEFAULT_AUDIO_FILE }
+        val fileDisplay = if (path.startsWith("asset://")) "Bundled sample ($path)" else path
+        return "Current Config: ${config.description}\n" +
             "Usage: ${config.usage} | ${config.contentType}\n" +
             "Mode: ${config.performanceMode}\n" +
-            "File: ${if (config.hasUsableFilePath) config.audioFilePath else "Bundled sample (${AudioConstants.DEFAULT_AUDIO_FILE})"}"
+            "File: $fileDisplay"
+    }
 
     override fun friendlyMessage(type: AudioErrorType): String = when (type) {
         AudioErrorType.FILE ->

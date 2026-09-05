@@ -388,11 +388,10 @@ class WavFileTest {
     @Throws(InterruptedException::class)
     fun closeRacingWithWriter_headerAlwaysMatchesAcceptedWrites() {
         // Engine stop() closes the WAV on the engine thread while the loop thread may still
-        // be writing its last buffer. Contract: every writeAudioData that returned true is
-        // fully reflected in the closed file — declared data size == accepted byte sum ==
-        // bytes on disk (no silent tail loss, no torn header), regardless of interleaving.
-        // Note: this pins the invariant against gross regressions; the unsynchronized tear
-        // window itself was nanoseconds wide and not reliably reproducible in a black-box test.
+        // be writing its last buffer. Contract: every accepted write is fully reflected in
+        // the closed file (declared size == accepted sum == bytes on disk), regardless of
+        // interleaving. Pins the invariant against gross regressions — the tear window itself
+        // was nanoseconds wide, not reproducible in a black-box test.
         repeat(50) { i ->
             val file = File(tempFolder.root, "race_$i.wav")
             val writer = WavFile(file.absolutePath)

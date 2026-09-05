@@ -52,9 +52,9 @@ abstract class AudioTestFragment : Fragment() {
                 statusText.text = "Permission granted"
                 return@registerForActivityResult
             }
-            // minSdk 32 (API 30+ semantics): a denial leaves the rationale showable unless the user is
-            // permanently denied (requires two denials), so rationale==false right after a denial is
-            // the permanent-deny signal itself — no "requested at least once" state is needed
+            // minSdk 32 (API 30+ semantics): a denial leaves the rationale showable unless
+            // permanently denied (requires two denials), so rationale==false right after a
+            // denial is the permanent-deny signal itself — no "requested once" state needed
             val permanent = denied.any { !shouldShowRequestPermissionRationale(it) }
             val builder = AlertDialog.Builder(ctx)
                 .setTitle(errorDialogTitle)
@@ -115,11 +115,11 @@ abstract class AudioTestFragment : Fragment() {
 
         viewModel.state.observe(viewLifecycleOwner) { updateButtonStates(it) }
         viewModel.statusMessage.observe(viewLifecycleOwner) { statusText.text = it }
-        // Clear on consume: prevents LiveData from replaying the last error value on
-        // configuration changes and popping the dialog again. Consumed-on-delivery also
-        // means a non-null errorMessage at view recreation is always an undelivered error:
-        // the fresh observers receive it (no clearError in initViewModel) — a finalize
-        // failure must survive the old view being torn down and still reach the user
+        // Clear on consume: prevents LiveData from replaying the last error on configuration
+        // changes and popping the dialog again. Consumed-on-delivery also means a non-null
+        // errorMessage at view recreation is always undelivered: fresh observers receive it
+        // (no clearError here) — a finalize failure survives view teardown and still reaches
+        // the user
         viewModel.errorMessage.observe(viewLifecycleOwner) { type ->
             type?.let {
                 handleError(it)
@@ -174,9 +174,9 @@ abstract class AudioTestFragment : Fragment() {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 val selected = configs[position]
                 // Echo of a programmatic selection (setup/reload/observer-driven setSelection)
-                // delivers the current config — not a user switch. Comparing instead of an
-                // init-consume flag survives every platform delivery quirk (sync / posted /
-                // absent callbacks) with no ordering assumptions
+                // delivers the current config — not a user switch. Value comparison survives
+                // every platform delivery quirk (sync / posted / absent) with no ordering
+                // assumptions
                 if (selected == viewModel.currentConfig.value) return
                 viewModel.setAudioConfig(selected)
                 Toast.makeText(requireContext(), "Switched to: ${selected.description}", Toast.LENGTH_SHORT).show()

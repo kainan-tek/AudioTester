@@ -26,6 +26,8 @@ data chunk 长度为奇数时 RIFF size 为奇数（仅 8-bit 单声道可能触
 
 此外 close 与 writeAudioData 共用 `@Synchronized` 监视器：主线程 close 还可能等待循环线程正在落盘的一整块缓冲（`bufferMultiplier`=100 时上限约 0.5MB，慢存储上数十毫秒）。该等待是正确性代价、不可移除——没有监视器，补头会漏计循环线程刚接受的一块写入，头部 data size 偏小导致文件截断（由 `closeRacingWithWriter_headerAlwaysMatchesAcceptedWrites` 测试守卫）。
 
+播放侧同理：`readData` 与 close 共用同一监视器，主线程 stop/close 还可能等待循环线程正在读入的一整块缓冲（读缓冲与写缓冲同量级）。该等待同样是正确性代价、不可移除——没有监视器，close 会在 `readData` 中途关闭流，读取从半关闭的 InputStream 上失败。
+
 ## 6. 流式 WAV 的日志时长失真
 
 data size = 0xFFFFFFFF 的流式 WAV，`duration` 按无符号值计算得出约 6 小时的荒谬时长。数据读取本身安全（受 EOF 约束），仅日志失真。
@@ -69,3 +71,9 @@ data size = 0xFFFFFFFF 的流式 WAV，`duration` 按无符号值计算得出约
 ## 15. release 期 FINALIZE 错误就地直报，不走 handleError（审查意见，评估后拒绝）
 
 `AudioRecorder.releaseAudioResources` 直接 `engineListener?.onError(FINALIZE, ...)` 并自带 `state != AudioState.ERROR` 抑制，依赖"先 onError 后 onStopped"的跨文件顺序不变量（两端注释 + `AudioViewModel.onStopped` 守卫锚定）。拒绝理由：全库仅此一个可终结资源（播放器 `wavFile?.close()` 不上报失败），抽 `reportReleaseError` helper 不消除两端契约、净行数为零；且若走 `handleError` 会重入 `releaseAudioResources`（此时 `wavFile` 尚未置 null），就地直报恰好绕开该递归。
+
+## 16. 播放截断判定与 stop() 的纳秒级竞态窗口（审查意见，评估后不修）
+
+`AudioPlayer.startLoop` 的截断判定（`hasUnreadDeclaredData`）在 `state == ACTIVE` 读取**之后**求值；若 `stop()` 全程（IDLE → cancel → `releaseAudioResources` → `close()` 清零 `remainingData`）恰好塞进这两条相邻语句之间（loop 线程恰在此被抢占），截断文件会被记为 "Playback completed" 而非 TRUNCATED，丢失诊断。
+
+不修理由：窗口为纳秒级——需 loop 线程恰在两条语句间被抢占，且 stop() 的 AudioTrack release + 磁盘 IO 完整落入该间隙，实际不可观测。修复方案已验证可行（判定快照提前到 state 读取之前，2 行；消息值的第二次读仅在 `handleLoopError` 真正报错、即无并发 close 时被消费），但收益仅限该极端场景，相邻交错（stop 先于判定 / 后于判定）的行为本已正确。

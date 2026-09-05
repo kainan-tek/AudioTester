@@ -29,16 +29,13 @@ object AudioConstants {
     /** AudioTrack usage constant map */
     object Usage {
         // ---- System usages (1000-1004) ----
-        // setUsage() only accepts SDK usages (switch-based whitelist); passing 1000-1004 always
-        // throws IllegalArgumentException. The official entry point is @SystemApi
-        // Builder.setSystemUsage() (requires MODIFY_AUDIO_ROUTING + system deployment; see the
-        // reflection-based implementation in buildAudioAttributes() — @SystemApi is not in the
-        // public SDK, so on normal installs reflection is blocked by hidden API restrictions or
-        // lacks permission, consistent with the existing convention that "system-only configs
-        // fail on normal installs").
-        // USAGE_SPEAKER_CLEANUP(1004) is gated by feature flag android.media.audio.speaker_cleanup_usage
-        // and is unavailable on some devices. Values per AOSP android-16.0.0_r4 (SYSTEM_USAGE_OFFSET = 1000).
-        // Another way to test AAOS usages: AAudioTester (native AAudioStreamBuilder_setUsage supports them natively).
+        // setUsage() only accepts SDK usages; passing 1000-1004 always throws IAE. The official
+        // entry is @SystemApi Builder.setSystemUsage() (MODIFY_AUDIO_ROUTING + system deployment)
+        // — see the reflection path in buildAudioAttributes(); on normal installs the call fails,
+        // the same convention as other system-only configs. USAGE_SPEAKER_CLEANUP(1004) is further
+        // gated by android.media.audio.speaker_cleanup_usage. Values per AOSP android-16.0.0_r4
+        // (SYSTEM_USAGE_OFFSET = 1000). For native AAOS testing: AAudioTester's
+        // AAudioStreamBuilder_setUsage supports them directly.
 
         val MAP = mapOf(
             "USAGE_UNKNOWN" to AudioAttributes.USAGE_UNKNOWN,
@@ -107,10 +104,10 @@ object AudioConstants {
     private val ALL_USAGE_MAP: Map<String, Int> = Usage.MAP + Usage.SYSTEM_MAP
 
     /**
-     * Builds player-domain AudioAttributes (single entry point, removes duplicate construction at call sites).
-     * usage < 1000 goes through setUsage(); system usages (>= 1000) are set via reflection on
-     * @SystemApi setSystemUsage(). The two cannot be mixed (build() throws IllegalArgumentException).
-     * System usages require MODIFY_AUDIO_ROUTING + system deployment; failure on normal installs is expected.
+     * Builds player-domain AudioAttributes (single entry point). usage < 1000 goes through
+     * setUsage(); system usages (>= 1000) via reflection on @SystemApi setSystemUsage() — the
+     * two cannot be mixed (build() throws IAE). Failure on normal installs is expected:
+     * system usage needs MODIFY_AUDIO_ROUTING + system deployment.
      */
     fun buildAudioAttributes(usage: String, contentType: String): AudioAttributes {
         val builder = AudioAttributes.Builder()
@@ -133,9 +130,8 @@ object AudioConstants {
         try {
             setSystemUsageMethod.invoke(this, usage)
         } catch (e: Throwable) {
-            // Normalize into a handleable error: hidden API interception throws NoSuchMethodError
-            // (an Error, which the engine's catch(Exception) cannot handle); normal installs /
-            // missing permission throw IAE / InvocationTargetException.
+            // Normalize into a handleable error: hidden-API interception throws NoSuchMethodError
+            // (an Error, unhandled by the engine's catch(Exception)); missing permission throws IAE
             throw IllegalArgumentException(
                 "setSystemUsage failed for usage $usage (requires MODIFY_AUDIO_ROUTING + system deployment)",
                 e
@@ -232,9 +228,9 @@ object AudioConstants {
 
     fun isValidSampleRate(rate: Int): Boolean = rate in 8000..192000
 
-    // Valid channel counts share the mask tables as their source: channel counts without a mask
-    // (e.g. input 4/6, output 3/5/7) must not silently fall back to stereo while the WAV header is
-    // still written with the original channel count, which would misalign the data.
+    // Valid channel counts share the mask tables: counts without a mask (e.g. input 4/6, output
+    // 3/5/7) must not silently fall back to stereo while the header keeps the original count —
+    // that misaligns the data.
     fun isValidInputChannelCount(count: Int): Boolean = count in INPUT_CHANNEL_MASKS
 
     fun isValidOutputChannelCount(count: Int): Boolean = count in OUTPUT_CHANNEL_MASKS
