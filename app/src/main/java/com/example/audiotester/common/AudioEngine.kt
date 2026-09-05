@@ -15,7 +15,8 @@ interface AudioEngine {
     interface Listener {
         fun onStarted()
         fun onStopped()
-        fun onError(error: String)
+        /** [detail] is diagnostic (already logged engine-side); the UI consumes only the type */
+        fun onError(type: AudioErrorType, detail: String)
     }
 
     /** Applies the config and returns what the engine will actually use: the argument itself
@@ -90,7 +91,7 @@ abstract class AudioEngineBase : AudioEngine {
         }
         if (state == AudioState.ACTIVE) {
             Log.w(tag, alreadyActiveMessage)
-            engineListener?.onError(alreadyActiveMessage)
+            engineListener?.onError(AudioErrorType.ALREADY_ACTIVE, alreadyActiveMessage)
             return false
         }
         if (state == AudioState.ERROR) state = AudioState.IDLE
@@ -106,10 +107,10 @@ abstract class AudioEngineBase : AudioEngine {
             Log.i(tag, startedMessage)
             true
         } catch (e: SecurityException) {
-            handleError("${AudioConstants.ErrorTypes.PERMISSION} $permissionDeniedMessage: ${e.message}")
+            handleError(AudioErrorType.PERMISSION, "$permissionDeniedMessage: ${e.message}")
             false
         } catch (e: Exception) {
-            handleError("${AudioConstants.ErrorTypes.STREAM} $startupFailedMessage: ${e.message}")
+            handleError(AudioErrorType.STREAM, "$startupFailedMessage: ${e.message}")
             false
         }
     }
@@ -167,10 +168,10 @@ abstract class AudioEngineBase : AudioEngine {
     }
 
     /** Mark ERROR, notify, release. Caller must hold the engine lock (start failure paths, handleLoopError) */
-    protected fun handleError(message: String) {
+    protected fun handleError(type: AudioErrorType, detail: String) {
         state = AudioState.ERROR
-        Log.e(tag, "Error: $message")
-        engineListener?.onError(message)
+        Log.e(tag, "Error: $type $detail")
+        engineListener?.onError(type, detail)
         releaseAudioResources()
     }
 
@@ -180,9 +181,9 @@ abstract class AudioEngineBase : AudioEngine {
      * under the lock before cancelling, so a cancelled loop never sees matching token + ACTIVE.
      */
     @Synchronized
-    protected fun handleLoopError(expected: Int, message: String) {
+    protected fun handleLoopError(expected: Int, type: AudioErrorType, detail: String) {
         if (expected != session || state != AudioState.ACTIVE) return
-        handleError(message)
+        handleError(type, detail)
     }
 
     companion object {

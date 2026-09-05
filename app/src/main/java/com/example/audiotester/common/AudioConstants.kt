@@ -6,6 +6,15 @@ import android.media.AudioTrack
 import android.media.MediaRecorder
 
 /**
+ * Error families surfaced through [AudioEngine.Listener.onError]. Fragments map these to
+ * user-facing text (exhaustive when — a new type fails compilation until every feature
+ * translates it); human-readable detail stays engine-side (logcat) and never reaches the UI.
+ */
+enum class AudioErrorType {
+    FILE, STREAM, PERMISSION, PARAM, FOCUS, FINALIZE, TRUNCATED, ALREADY_ACTIVE
+}
+
+/**
  * Audio constants (player domain + recorder domain combined)
  */
 object AudioConstants {
@@ -14,18 +23,6 @@ object AudioConstants {
     const val CONFIG_FILE_PATH = "/data/audio_configs.xml"
     const val ASSETS_CONFIG_FILE = "audio_configs.xml"
     const val DEFAULT_AUDIO_FILE = "asset://sample/48k_2ch_16bit.wav"
-
-    /**
-     * Error prefixes
-     */
-    object ErrorTypes {
-        const val FILE = "[FILE]"
-        const val STREAM = "[STREAM]"
-        const val PERMISSION = "[PERMISSION]"
-        const val PARAM = "[PARAM]"
-        const val FOCUS = "[FOCUS]"
-        const val FINALIZE = "[FINALIZE]"
-    }
 
     // ===== Player domain =====
 

@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import com.example.audiotester.common.AudioConfig
 import com.example.audiotester.common.AudioEngine
+import com.example.audiotester.common.AudioErrorType
 import com.example.audiotester.common.AudioMessages
 import com.example.audiotester.common.AudioTestFragment
 
@@ -35,18 +36,21 @@ class RecorderFragment : AudioTestFragment() {
             "File: $filePathDisplay"
     }
 
-    override fun friendlyErrorMessage(raw: String): String = when {
-        raw.startsWith("[FILE]", ignoreCase = true) ->
+    override fun friendlyMessage(type: AudioErrorType): String = when (type) {
+        AudioErrorType.FILE ->
             "Unable to create recording file. Please check storage permissions and available space."
-        raw.startsWith("[FINALIZE]", ignoreCase = true) ->
+        AudioErrorType.FINALIZE ->
             "Recording data was saved but the file could not be finalized. The file may be unreadable. Please check storage."
-        raw.startsWith("[STREAM]", ignoreCase = true) ->
+        AudioErrorType.STREAM ->
             "Audio system initialization failed. Please try again."
-        raw.startsWith("[PERMISSION]", ignoreCase = true) ->
+        AudioErrorType.PERMISSION ->
             "Microphone access permission is required. Please grant the permission in Settings."
-        raw.startsWith("[PARAM]", ignoreCase = true) ->
+        AudioErrorType.PARAM ->
             "Invalid audio configuration. Please select a different configuration."
-        raw.contains("Already recording", ignoreCase = true) -> "Recording is already in progress."
-        else -> "Recording failed. Please try again."
+        AudioErrorType.ALREADY_ACTIVE ->
+            "Recording is already in progress."
+        // The recorder never emits TRUNCATED / FOCUS; kept for exhaustiveness
+        AudioErrorType.TRUNCATED -> "Recording failed. Please try again."
+        AudioErrorType.FOCUS -> "Recording failed. Please try again."
     }
 }

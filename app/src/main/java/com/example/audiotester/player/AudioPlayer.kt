@@ -10,6 +10,7 @@ import android.os.SystemClock
 import android.util.Log
 import com.example.audiotester.common.AudioConstants
 import com.example.audiotester.common.AudioEngineBase
+import com.example.audiotester.common.AudioErrorType
 import com.example.audiotester.common.AudioState
 import com.example.audiotester.common.WavFile
 import kotlinx.coroutines.CancellationException
@@ -31,9 +32,14 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
 
     override val tag: String get() = TAG
 
+    // @Volatile on the loop-read fields (audioTrack/wavFile): same reasoning as AudioRecorder —
+    // launch() publishes only the initial values, the stop-path nulling needs its own guarantee.
+    // audioManager/audioFocusRequest are engine-thread-only, the loop never reads them
+    @Volatile
     private var audioTrack: AudioTrack? = null
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
+    @Volatile
     private var wavFile: WavFile? = null
 
     override val alreadyActiveMessage = "Already playing"
@@ -72,7 +78,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
         // Reject unknown enum strings before opening anything: the parse-time fallback would
         // silently play with the default constants while the test looks successful
         AudioConstants.findUnknownPlayerEnum(currentConfig.usage, currentConfig.contentType, currentConfig.performanceMode)?.let {
-            handleError("${AudioConstants.ErrorTypes.PARAM} Unknown $it")
+            handleError(AudioErrorType.PARAM, "Unknown $it")
             return false
         }
 
@@ -83,7 +89,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
             try {
                 wavFile.open(context.assets.open(path.removePrefix("asset://")))
             } catch (_: IOException) {
-                handleError("${AudioConstants.ErrorTypes.FILE} Cannot open audio asset: $path")
+                handleError(AudioErrorType.FILE, "Cannot open audio asset: $path")
                 return false
             }
         } else {
@@ -91,7 +97,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
         }
 
         if (!opened) {
-            handleError("${AudioConstants.ErrorTypes.FILE} Cannot open audio file: $path")
+            handleError(AudioErrorType.FILE, "Cannot open audio file: $path")
             return false
         }
 
@@ -113,7 +119,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                 AudioConstants.buildAudioAttributes(currentConfig.usage, currentConfig.contentType)
 
             if (!requestAudioFocus(audioAttributes)) {
-                handleError("${AudioConstants.ErrorTypes.FOCUS} Cannot obtain audio focus")
+                handleError(AudioErrorType.FOCUS, "Cannot obtain audio focus")
                 return false
             }
 
@@ -125,7 +131,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
             Log.i(TAG, "getMinBufferSize: $minBufferSize bytes")
 
             if (minBufferSize <= 0) {
-                handleError("${AudioConstants.ErrorTypes.PARAM} Unsupported audio parameter combination: ${wavFile.sampleRate}Hz, ${wavFile.channelCount}ch, ${wavFile.bitsPerSample}bit")
+                handleError(AudioErrorType.PARAM, "Unsupported audio parameter combination: ${wavFile.sampleRate}Hz, ${wavFile.channelCount}ch, ${wavFile.bitsPerSample}bit")
                 return false
             }
 
@@ -140,37 +146,30 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                 .build()
 
             if (audioTrack?.state != AudioTrack.STATE_INITIALIZED) {
-                handleError("${AudioConstants.ErrorTypes.STREAM} AudioTrack initialization failed, state: ${audioTrack?.state}")
+                handleError(AudioErrorType.STREAM, "AudioTrack initialization failed, state: ${audioTrack?.state}")
                 return false
             }
 
             Log.i(
                 TAG,
-                "AudioTrack initialized - ${wavFile.sampleRate}Hz, ${wavFile.channelDescription}, ${wavFile.bitsPerSample}bit"
+                "AudioTrack initialized - ${wavFile.sampleRate}Hz, ${wavFile.channelDescription}, " +
+                    "${wavFile.bitsPerSample}bit, layout: ${wavFile.channelLayout}"
             )
-
-            if (wavFile.channelCount >= 10) {
-                Log.i(TAG, "3D audio information:")
-                Log.i(TAG, "Channel layout: ${wavFile.channelLayout}")
-                if (wavFile.channelCount == 12) {
-                    Log.i(TAG, "7.1.4 format: includes 4 height channels (Ltf Rtf Ltb Rtb)")
-                }
-            }
 
             return true
         } catch (e: Exception) {
-            handleError("${AudioConstants.ErrorTypes.STREAM} AudioTrack creation failed: ${e.message}")
+            handleError(AudioErrorType.STREAM, "AudioTrack creation failed: ${e.message}")
             return false
         }
     }
 
     private fun validateAudioParameters(wavFile: WavFile): Boolean {
         if (!AudioConstants.isValidSampleRate(wavFile.sampleRate)) {
-            handleError("${AudioConstants.ErrorTypes.PARAM} Unsupported sample rate: ${wavFile.sampleRate}Hz (supported range: 8000-192000Hz)")
+            handleError(AudioErrorType.PARAM, "Unsupported sample rate: ${wavFile.sampleRate}Hz (supported range: 8000-192000Hz)")
             return false
         }
         if (!AudioConstants.isValidOutputChannelCount(wavFile.channelCount)) {
-            handleError("${AudioConstants.ErrorTypes.PARAM} Unsupported channel count: ${wavFile.channelCount} (supported: 1/2/4/6/8/10/12/16)")
+            handleError(AudioErrorType.PARAM, "Unsupported channel count: ${wavFile.channelCount} (supported: 1/2/4/6/8/10/12/16)")
             return false
         }
         return true
@@ -291,11 +290,14 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                     if (bytesWritten != alignedBytes) {
                         throw IOException("AudioTrack write incomplete: $bytesWritten/$alignedBytes")
                     }
+                    // Accumulate before the partial-tail break: these frames are already queued
+                    // in the track, and the drain below must wait for all of them, not stop
+                    // one write-buffer early and let audioTrack.stop() cut off the tail
+                    totalBytes += bytesWritten
                     if (alignedBytes != bytesRead) {
                         readLoopEnded = true   // partial tail = end of data; drain and stop below
                         break
                     }
-                    totalBytes += bytesWritten
                     if (totalBytes - lastLoggedBytes >= PROGRESS_LOG_INTERVAL_BYTES) {
                         val mbPlayed = totalBytes / (1024.0 * 1024.0)
                         Log.v(TAG, "Progress: %.1fMB".format(Locale.US, mbPlayed))
@@ -311,7 +313,8 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                     if (readLoopEnded && wavFile.hasUnreadDeclaredData) {
                         handleLoopError(
                             session,
-                            "${AudioConstants.ErrorTypes.FILE} audio data ended ${wavFile.remainingData} bytes short of the declared size")
+                            AudioErrorType.TRUNCATED,
+                            "audio data ended ${wavFile.remainingData} bytes short of the declared size")
                         return@launch
                     }
                     // On a natural end (EOF), stop() would discard the frames still buffered in
@@ -338,8 +341,13 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                 // Cancellation is a stop, not an error: rethrow rather than rely on
                 // handleLoopError's guard (it only no-ops because stopLocked sets IDLE before cancel)
                 throw e
+            } catch (e: OutOfMemoryError) {
+                // A resource condition, not a bug: report it instead of crashing the process —
+                // e.message carries the failed allocation size (ART), and releaseAudioResources
+                // then frees the very buffers that caused it. Other Errors still crash on purpose
+                handleLoopError(session, AudioErrorType.STREAM, "Buffer allocation failed: ${e.message}")
             } catch (e: Exception) {
-                handleLoopError(session, "${AudioConstants.ErrorTypes.STREAM} Playback error: ${e.message}")
+                handleLoopError(session, AudioErrorType.STREAM, "Playback error: ${e.message}")
             }
         }
     }

@@ -3,6 +3,7 @@ package com.example.audiotester
 import android.content.Context
 import com.example.audiotester.common.AudioConfig
 import com.example.audiotester.common.AudioEngine
+import com.example.audiotester.common.AudioErrorType
 import com.example.audiotester.player.AudioPlayer
 import com.example.audiotester.recorder.AudioRecorder
 import org.junit.Assert.assertFalse
@@ -19,17 +20,17 @@ import org.mockito.Mockito
 class EngineEnumValidationTest {
 
     private class CapturingListener : AudioEngine.Listener {
-        val errors = mutableListOf<String>()
+        val errors = mutableListOf<Pair<AudioErrorType, String>>()
         override fun onStarted() {}
         override fun onStopped() {}
-        override fun onError(error: String) { errors += error }
+        override fun onError(type: AudioErrorType, detail: String) { errors += type to detail }
     }
 
     private fun assertParamError(listener: CapturingListener, typo: String) {
         assertFalse(listener.errors.isEmpty())
         assertTrue(
-            "expected a [PARAM] error naming the typo '$typo', got: ${listener.errors}",
-            listener.errors.any { it.startsWith("[PARAM]") && typo in it }
+            "expected a PARAM error naming the typo '$typo', got: ${listener.errors}",
+            listener.errors.any { it.first == AudioErrorType.PARAM && typo in it.second }
         )
     }
 

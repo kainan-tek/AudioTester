@@ -31,8 +31,8 @@ class AudioViewModel(
     private val _statusMessage = MutableLiveData<String>()
     val statusMessage: LiveData<String> = _statusMessage
 
-    private val _errorMessage = MutableLiveData<String?>()
-    val errorMessage: LiveData<String?> = _errorMessage
+    private val _errorMessage = MutableLiveData<AudioErrorType?>()
+    val errorMessage: LiveData<AudioErrorType?> = _errorMessage
 
     private val _currentConfig = MutableLiveData<AudioConfig>()
     val currentConfig: LiveData<AudioConfig> = _currentConfig
@@ -60,7 +60,6 @@ class AudioViewModel(
                     val defaultConfig = configs[0]
                     _currentConfig.value = engine.setAudioConfig(defaultConfig)
                 }
-                _errorMessage.value = null
             }
         }
     }
@@ -69,7 +68,7 @@ class AudioViewModel(
         if (_state.value == AudioState.ACTIVE || _state.value == AudioState.STARTING) {
             updateUI {
                 _statusMessage.value = "Cannot reload configuration while active"
-                _errorMessage.value = "Please stop the current operation before reloading configuration"
+                _errorMessage.value = AudioErrorType.ALREADY_ACTIVE
             }
             return
         }
@@ -86,7 +85,7 @@ class AudioViewModel(
                     _statusMessage.value = "Configuration reloaded successfully: ${configs.size} configs"
                 } else {
                     _statusMessage.value = "Configuration file is empty or format error"
-                    _errorMessage.value = "No valid audio configuration found"
+                    _errorMessage.value = AudioErrorType.PARAM
                 }
             }
         }
@@ -121,12 +120,16 @@ class AudioViewModel(
         engine.stop()
     }
 
+    /** Must be called on the main thread (writes LiveData directly); spinner callback is the only production caller */
     fun setAudioConfig(config: AudioConfig) {
-        updateUI {
-            _currentConfig.value = engine.setAudioConfig(config)
-            _statusMessage.value = "Configuration updated: ${config.description}"
-            _errorMessage.value = null
-        }
+        // Describe what the engine actually applied, not what was requested: a rejected
+        // (ACTIVE) request returns the previous config, and the status must not claim
+        // the rejected one took effect. Same main-thread-direct style as start/stop —
+        // no updateUI hop for a call that is already on the main thread
+        val applied = engine.setAudioConfig(config)
+        _currentConfig.value = applied
+        _statusMessage.value = "Configuration updated: ${applied.description}"
+        _errorMessage.value = null
     }
 
     fun getAllAudioConfigs(): List<AudioConfig> = _availableConfigs.value ?: emptyList()
@@ -135,8 +138,10 @@ class AudioViewModel(
         _errorMessage.value = null
         if (_state.value == AudioState.ERROR) {
             _state.value = AudioState.IDLE
-            // Do not rewrite _statusMessage: the error text must stay in the status bar; recovery
-            // timing is left to the error dialog's OK/Cancel
+            // Do not rewrite _statusMessage: the error text stays in the status bar until
+            // something else writes it. In the active-observer stop path the follow-up
+            // onStopped does overwrite it ("Recording Stopped") — accepted: the dialog is
+            // the error surface there, and dismissing restores the ready text
         }
     }
 
@@ -175,11 +180,11 @@ class AudioViewModel(
                 }
             }
 
-            override fun onError(error: String) {
+            override fun onError(type: AudioErrorType, detail: String) {
                 updateUI {
                     _state.value = AudioState.ERROR
                     _statusMessage.value = messages.failed
-                    _errorMessage.value = error
+                    _errorMessage.value = type
                 }
             }
         })

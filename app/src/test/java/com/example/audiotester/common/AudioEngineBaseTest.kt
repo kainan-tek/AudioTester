@@ -67,7 +67,7 @@ class AudioEngineBaseTest {
         }
         override fun releaseAudioResources() { releaseCount.incrementAndGet() }
 
-        fun loopError(token: Int, message: String) = handleLoopError(token, message)
+        fun loopError(token: Int, type: AudioErrorType, detail: String) = handleLoopError(token, type, detail)
         fun naturalEnd(token: Int) = stopIfSession(token)
 
         /** Per-session loop latches, recreated by each startLoop(): lets the test pin and release
@@ -93,7 +93,7 @@ class AudioEngineBaseTest {
                     if (loop.fail) throw IOException("loop failure")
                     stopIfSession(session)   // natural end
                 } catch (e: Exception) {
-                    handleLoopError(session, "${AudioConstants.ErrorTypes.STREAM} $startupFailedMessage: ${e.message}")
+                    handleLoopError(session, AudioErrorType.STREAM, "$startupFailedMessage: ${e.message}")
                 }
                 loop.done.countDown()
             }
@@ -103,10 +103,10 @@ class AudioEngineBaseTest {
     private class RecordingListener : AudioEngine.Listener {
         val started = AtomicInteger()
         val stopped = AtomicInteger()
-        val errors = mutableListOf<String>()
+        val errors = mutableListOf<Pair<AudioErrorType, String>>()
         override fun onStarted() { started.incrementAndGet() }
         override fun onStopped() { stopped.incrementAndGet() }
-        override fun onError(error: String) { errors.add(error) }
+        override fun onError(type: AudioErrorType, detail: String) { errors.add(type to detail) }
     }
 
     @Test
@@ -156,7 +156,7 @@ class AudioEngineBaseTest {
         val listener = RecordingListener()
         engine.setListener(listener)
 
-        engine.loopError(engine.currentToken, "boom")
+        engine.loopError(engine.currentToken, AudioErrorType.STREAM, "boom")
 
         assertEquals(AudioState.IDLE, engine.testState)
         assertTrue(listener.errors.isEmpty())
@@ -210,10 +210,10 @@ class AudioEngineBaseTest {
         engine.startLatch.countDown()
         assertTrue(engine.start())
 
-        engine.loopError(engine.currentToken, "boom")
+        engine.loopError(engine.currentToken, AudioErrorType.STREAM, "boom")
 
         assertEquals(AudioState.ERROR, engine.testState)
-        assertEquals(listOf("boom"), listener.errors)
+        assertEquals(listOf(AudioErrorType.STREAM to "boom"), listener.errors)
         assertEquals(1, engine.releaseCount.get())
 
         engine.release()   // also parks-and-cancels the loop started above (keeps the test hermetic)
@@ -316,7 +316,7 @@ class AudioEngineBaseTest {
         assertTrue(engine.start())      // session 2 commits
         assertEquals(AudioState.ACTIVE, engine.testState)
 
-        engine.loopError(staleToken, "boom")
+        engine.loopError(staleToken, AudioErrorType.STREAM, "boom")
 
         assertEquals(AudioState.ACTIVE, engine.testState)
         assertTrue(listener.errors.isEmpty())

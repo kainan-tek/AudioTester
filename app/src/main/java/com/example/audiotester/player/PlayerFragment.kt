@@ -6,6 +6,7 @@ import android.os.Build
 import com.example.audiotester.common.AudioConfig
 import com.example.audiotester.common.AudioConstants
 import com.example.audiotester.common.AudioEngine
+import com.example.audiotester.common.AudioErrorType
 import com.example.audiotester.common.AudioMessages
 import com.example.audiotester.common.AudioTestFragment
 
@@ -31,9 +32,11 @@ class PlayerFragment : AudioTestFragment() {
             arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
 
-    /** Built-in audio sources (sentinel path, see AudioConfig.hasUsableFilePath) read from assets and need no storage permission; skip the permission gate */
+    /** Built-in audio sources (sentinel path, see AudioConfig.hasUsableFilePath) read from assets and need no storage
+     *  permission; skip the permission gate. While configs are still loading (null) the effective config is unknown —
+     *  ask conservatively: a denied request costs nothing, but skipping a needed one makes start fail as a bogus [FILE] */
     override fun permissionsForCurrentConfig(): Array<String> =
-        if (viewModel.currentConfig.value?.hasUsableFilePath == true) storagePermissions() else emptyArray()
+        if (viewModel.currentConfig.value?.hasUsableFilePath != false) storagePermissions() else emptyArray()
 
     override fun formatInfo(config: AudioConfig): String =
         "Current Config: ${config.description}\n" +
@@ -41,19 +44,22 @@ class PlayerFragment : AudioTestFragment() {
             "Mode: ${config.performanceMode}\n" +
             "File: ${config.audioFilePath.ifEmpty { "Bundled sample (${AudioConstants.DEFAULT_AUDIO_FILE})" }}"
 
-    override fun friendlyErrorMessage(raw: String): String = when {
-        raw.startsWith("[FILE]", ignoreCase = true) ->
+    override fun friendlyMessage(type: AudioErrorType): String = when (type) {
+        AudioErrorType.FILE ->
             "Unable to open audio file. The file may be corrupted or inaccessible."
-        raw.startsWith("[STREAM]", ignoreCase = true) ->
+        AudioErrorType.TRUNCATED ->
+            "The audio file is incomplete: its content ended before the declared size, so playback stopped early."
+        AudioErrorType.STREAM ->
             "Audio system initialization failed. Please try again."
-        raw.startsWith("[PERMISSION]", ignoreCase = true) ->
+        AudioErrorType.PERMISSION ->
             "Audio file access permission is required. Please grant the permission in Settings."
-        raw.startsWith("[PARAM]", ignoreCase = true) ->
+        AudioErrorType.PARAM ->
             "Invalid audio configuration. Please select a different configuration."
-        raw.startsWith("[FOCUS]", ignoreCase = true) ->
+        AudioErrorType.FOCUS ->
             "Unable to play audio. Another app may be using the audio system."
-        raw.contains("Already playing", ignoreCase = true) ->
+        AudioErrorType.ALREADY_ACTIVE ->
             "Playback is already in progress."
-        else -> "Playback failed. Please try again."
+        // The player never emits FINALIZE; kept for exhaustiveness
+        AudioErrorType.FINALIZE -> "Playback failed. Please try again."
     }
 }

@@ -43,7 +43,7 @@ class AudioViewModelTest {
         }
         override fun start(): Boolean {
             if (active) {
-                listener?.onError("Already playing")
+                listener?.onError(AudioErrorType.ALREADY_ACTIVE, "Already playing")
                 return false
             }
             active = true
@@ -54,7 +54,7 @@ class AudioViewModelTest {
             if (!active) return
             active = false
             stopCalled = true
-            if (failRelease) listener?.onError("[FINALIZE] test failure")
+            if (failRelease) listener?.onError(AudioErrorType.FINALIZE, "test failure")
             listener?.onStopped()
         }
 
@@ -161,7 +161,7 @@ class AudioViewModelTest {
         advanceUntilIdle()
 
         assertEquals(AudioState.ERROR, viewModel.state.value)
-        assertEquals("[FINALIZE] test failure", viewModel.errorMessage.value)
+        assertEquals(AudioErrorType.FINALIZE, viewModel.errorMessage.value)
     }
 
     /** Stop during the startup window must not leave the UI holding a config the engine rejected */

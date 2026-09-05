@@ -38,8 +38,6 @@ abstract class AudioTestFragment : Fragment() {
     protected lateinit var infoText: TextView
     protected lateinit var configTitleText: TextView
 
-    private var isSpinnerInitialized = false
-
     /**
      * Request runtime permissions via the Activity Result API (replaces the deprecated
      * requestPermissions / onRequestPermissionsResult).
@@ -76,7 +74,7 @@ abstract class AudioTestFragment : Fragment() {
     protected abstract val messages: AudioMessages
     protected abstract fun permissionsForCurrentConfig(): Array<String>
     protected abstract fun formatInfo(config: AudioConfig): String
-    protected abstract fun friendlyErrorMessage(raw: String): String
+    protected abstract fun friendlyMessage(type: AudioErrorType): String
 
     protected open val configTitle: CharSequence get() = "Configuration"
     protected open val errorDialogTitle: CharSequence get() = "Audio Error"
@@ -115,16 +113,15 @@ abstract class AudioTestFragment : Fragment() {
             this, AudioViewModel.Factory(app, { ctx -> createEngine(ctx) }, section, messages)
         )[AudioViewModel::class.java]
 
-        // On view recreation (rotation), clear unconsumed errors so LiveData does not replay an
-        // old error and pop the dialog again
-        viewModel.clearError()
-
         viewModel.state.observe(viewLifecycleOwner) { updateButtonStates(it) }
         viewModel.statusMessage.observe(viewLifecycleOwner) { statusText.text = it }
         // Clear on consume: prevents LiveData from replaying the last error value on
-        // configuration changes and popping the dialog again
-        viewModel.errorMessage.observe(viewLifecycleOwner) { error ->
-            error?.let {
+        // configuration changes and popping the dialog again. Consumed-on-delivery also
+        // means a non-null errorMessage at view recreation is always an undelivered error:
+        // the fresh observers receive it (no clearError in initViewModel) — a finalize
+        // failure must survive the old view being torn down and still reach the user
+        viewModel.errorMessage.observe(viewLifecycleOwner) { type ->
+            type?.let {
                 handleError(it)
                 viewModel.clearError()
             }
@@ -139,7 +136,6 @@ abstract class AudioTestFragment : Fragment() {
         viewModel.availableConfigs.observe(viewLifecycleOwner) {
             if (configSpinner.adapter != null) {
                 // After a reload the adapter already exists; rebuild it to reflect the new config list
-                isSpinnerInitialized = false
                 setupConfigSpinner()
             }
         }
@@ -176,11 +172,12 @@ abstract class AudioTestFragment : Fragment() {
 
         configSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                if (!isSpinnerInitialized) {
-                    isSpinnerInitialized = true
-                    return
-                }
                 val selected = configs[position]
+                // Echo of a programmatic selection (setup/reload/observer-driven setSelection)
+                // delivers the current config — not a user switch. Comparing instead of an
+                // init-consume flag survives every platform delivery quirk (sync / posted /
+                // absent callbacks) with no ordering assumptions
+                if (selected == viewModel.currentConfig.value) return
                 viewModel.setAudioConfig(selected)
                 Toast.makeText(requireContext(), "Switched to: ${selected.description}", Toast.LENGTH_SHORT).show()
             }
@@ -197,7 +194,6 @@ abstract class AudioTestFragment : Fragment() {
     private fun updateSpinnerSelection(config: AudioConfig) {
         val index = viewModel.getAllAudioConfigs().indexOf(config)
         if (index >= 0 && index != configSpinner.selectedItemPosition) {
-            isSpinnerInitialized = false
             configSpinner.setSelection(index)
         }
     }
@@ -223,8 +219,8 @@ abstract class AudioTestFragment : Fragment() {
     }
 
     @SuppressLint("SetTextI18n")
-    private fun handleError(error: String) {
-        val userMessage = friendlyErrorMessage(error)
+    private fun handleError(type: AudioErrorType) {
+        val userMessage = friendlyMessage(type)
         AlertDialog.Builder(requireContext())
             .setTitle(errorDialogTitle)
             .setMessage(userMessage)

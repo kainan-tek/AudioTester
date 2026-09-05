@@ -6,6 +6,7 @@ import android.media.AudioRecord
 import android.util.Log
 import com.example.audiotester.common.AudioConstants
 import com.example.audiotester.common.AudioEngineBase
+import com.example.audiotester.common.AudioErrorType
 import com.example.audiotester.common.AudioState
 import com.example.audiotester.common.WavFile
 import kotlinx.coroutines.isActive
@@ -25,7 +26,12 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
 
     override val tag: String get() = TAG
 
+    // @Volatile: the run loop reads these on its own thread while stop()/release() null them
+    // under the engine lock — launch() publishes only the initial values, not the stop-path
+    // writes (cancel() runs before the nulling, so its sync edge points the wrong way)
+    @Volatile
     private var audioRecord: AudioRecord? = null
+    @Volatile
     private var wavFile: WavFile? = null
 
     override val alreadyActiveMessage = "Already recording"
@@ -47,10 +53,15 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
         audioRecord = null
 
         wavFile?.let {
-            // A failed header patch leaves data on disk behind a placeholder header — an
-            // unreadable file. Surface it: silence here would report a broken save as success
-            if (!it.close()) {
-                engineListener?.onError("${AudioConstants.ErrorTypes.FINALIZE} Failed to finalize the recording file (data is saved but the header is incomplete)")
+            // A failed header patch leaves data behind a placeholder header — an unreadable
+            // file. Surface it, unless an error was already reported for this session
+            // (handleError sets ERROR): the finalize failure must not displace the root cause
+            if (!it.close() && state != AudioState.ERROR) {
+                // Logged as well as reported: during ViewModel teardown (onCleared) the
+                // listener's updateUI lands on an already-cancelled viewModelScope, so this
+                // is the only trace the failure leaves
+                Log.e(TAG, "Failed to finalize the recording file (the header is incomplete)")
+                engineListener?.onError(AudioErrorType.FINALIZE, "Failed to finalize the recording file (the header is incomplete; the file may be unreadable)")
             }
         }
         wavFile = null
@@ -64,7 +75,7 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
         // Reject unknown enum strings before touching the file system: the parse-time fallback
         // would silently record with the default source while the test looks successful
         AudioConstants.findUnknownRecorderEnum(currentConfig.audioSource)?.let {
-            handleError("${AudioConstants.ErrorTypes.PARAM} Unknown $it")
+            handleError(AudioErrorType.PARAM, "Unknown $it")
             return false
         }
 
@@ -88,18 +99,18 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
                 val file = File(outputPath)
                 val parentDir = file.parentFile
                 val errorMsg = if (parentDir != null && !parentDir.canWrite()) {
-                    "${AudioConstants.ErrorTypes.FILE} No write permission for directory: ${parentDir.absolutePath}"
+                    "No write permission for directory: ${parentDir.absolutePath}"
                 } else {
-                    "${AudioConstants.ErrorTypes.FILE} Cannot create output file: $outputPath"
+                    "Cannot create output file: $outputPath"
                 }
-                handleError(errorMsg)
+                handleError(AudioErrorType.FILE, errorMsg)
                 false
             }
         } catch (e: SecurityException) {
-            handleError("${AudioConstants.ErrorTypes.PERMISSION} Permission denied when creating file: $outputPath - ${e.message}")
+            handleError(AudioErrorType.PERMISSION, "Permission denied when creating file: $outputPath - ${e.message}")
             false
         } catch (e: Exception) {
-            handleError("${AudioConstants.ErrorTypes.FILE} Failed to create output file: $outputPath - ${e.message}")
+            handleError(AudioErrorType.FILE, "Failed to create output file: $outputPath - ${e.message}")
             false
         }
     }
@@ -114,7 +125,7 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
             Log.i(TAG, "getMinBufferSize: $minBufferSize bytes")
 
             if (minBufferSize <= 0) {
-                handleError("${AudioConstants.ErrorTypes.PARAM} Unsupported audio parameter combination")
+                handleError(AudioErrorType.PARAM, "Unsupported audio parameter combination")
                 return false
             }
 
@@ -130,17 +141,16 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
                 ).setBufferSizeInBytes(bufferSize).build()
 
             if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
-                handleError("${AudioConstants.ErrorTypes.STREAM} AudioRecord initialization failed")
+                handleError(AudioErrorType.STREAM, "AudioRecord initialization failed")
                 return false
             }
 
             Log.i(TAG, "AudioRecord initialized successfully - ${currentConfig.description}")
             true
-        } catch (_: SecurityException) {
-            handleError("${AudioConstants.ErrorTypes.PERMISSION} Recording permission denied")
-            false
         } catch (e: Exception) {
-            handleError("${AudioConstants.ErrorTypes.STREAM} AudioRecord creation failed: ${e.message}")
+            // SecurityException is not caught here on purpose: it propagates to start()'s
+            // base catch, which reports the same PERMISSION text plus the exception detail
+            handleError(AudioErrorType.STREAM, "AudioRecord creation failed: ${e.message}")
             false
         }
     }
@@ -152,15 +162,15 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
 
         return when {
             !AudioConstants.isValidSampleRate(sampleRate) -> {
-                handleError("${AudioConstants.ErrorTypes.PARAM} Unsupported sample rate: ${sampleRate}Hz")
+                handleError(AudioErrorType.PARAM, "Unsupported sample rate: ${sampleRate}Hz")
                 false
             }
             !AudioConstants.isValidInputChannelCount(channelCount) -> {
-                handleError("${AudioConstants.ErrorTypes.PARAM} Unsupported input channel count: $channelCount (supported: 1/2/8/10/12/14/16)")
+                handleError(AudioErrorType.PARAM, "Unsupported input channel count: $channelCount (supported: 1/2/8/10/12/14/16)")
                 false
             }
             !AudioConstants.isValidBitDepth(bitsPerSample) -> {
-                handleError("${AudioConstants.ErrorTypes.PARAM} Unsupported bit depth: ${bitsPerSample}bit")
+                handleError(AudioErrorType.PARAM, "Unsupported bit depth: ${bitsPerSample}bit")
                 false
             }
             else -> true
@@ -218,10 +228,15 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
                     }
                     stopIfSession(session)
                 }
+            } catch (e: OutOfMemoryError) {
+                // A resource condition, not a bug: report it instead of crashing the process —
+                // e.message carries the failed allocation size (ART), and releaseAudioResources
+                // then frees the very buffers that caused it. Other Errors still crash on purpose
+                handleLoopError(session, AudioErrorType.STREAM, "Buffer allocation failed: ${e.message}")
             } catch (e: SecurityException) {
-                handleLoopError(session, "${AudioConstants.ErrorTypes.PERMISSION} Recording permission denied: ${e.message}")
+                handleLoopError(session, AudioErrorType.PERMISSION, "Recording permission denied: ${e.message}")
             } catch (e: Exception) {
-                handleLoopError(session, "${AudioConstants.ErrorTypes.STREAM} Recording error: ${e.message}")
+                handleLoopError(session, AudioErrorType.STREAM, "Recording error: ${e.message}")
             }
         }
     }
