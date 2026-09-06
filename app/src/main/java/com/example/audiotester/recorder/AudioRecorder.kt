@@ -145,9 +145,13 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
 
             Log.i(TAG, "AudioRecord initialized successfully - ${currentConfig.description}")
             true
+        } catch (e: SecurityException) {
+            // Must precede the generic catch: restricted sources (HOTWORD/ULTRASOUND) throw
+            // SecurityException from build() on some builds — the generic catch would
+            // intercept it (it is an Exception subclass) and misreport it as STREAM
+            handleError(AudioErrorType.PERMISSION, "$permissionDeniedMessage: ${e.message}")
+            false
         } catch (e: Exception) {
-            // SecurityException is not caught here on purpose: it propagates to start()'s
-            // base catch, which reports the same PERMISSION text plus the exception detail
             handleError(AudioErrorType.STREAM, "AudioRecord creation failed: ${e.message}")
             false
         }
