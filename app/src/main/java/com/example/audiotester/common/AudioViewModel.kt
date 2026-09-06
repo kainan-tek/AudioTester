@@ -11,6 +11,12 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+// User-facing config-readiness texts, each shown by a refusal guard and recycled by a landing
+// status write — single-sourced so the two sites cannot drift (see AudioMessages for the pattern)
+private const val MSG_CONFIG_LOADING = "Configuration loading, please wait"
+private const val MSG_CONFIG_RELOADING = "Configuration reloading, please wait"
+private const val MSG_CONFIG_EMPTY = "Configuration file is empty or format error"
+
 /**
  * Unified audio ViewModel: driven by a single [AudioEngine], handles config loading/reloading,
  * start/stop, state and messages.
@@ -76,7 +82,7 @@ class AudioViewModel(
                     _statusMessage.value = messages.ready
                 } else {
                     // Same diagnosis as the reload empty branch; also recycles a stale waiting text
-                    _statusMessage.value = "Configuration file is empty or format error"
+                    _statusMessage.value = MSG_CONFIG_EMPTY
                 }
             }
         }
@@ -87,7 +93,7 @@ class AudioViewModel(
         // second reload would reopen the start-vs-apply race after that clearing. Its waiting
         // text is recycled by the in-flight reload's own landing status write
         if (reloadInFlight) {
-            _statusMessage.value = "Configuration reloading, please wait"
+            _statusMessage.value = MSG_CONFIG_RELOADING
             return
         }
         // Same refusal family as start()'s not-loaded guard: a reload landing first would set
@@ -95,7 +101,7 @@ class AudioViewModel(
         // before the initial landing and breaking the IDLE-at-landing invariant that the
         // initial apply and status write rely on
         if (_availableConfigs.value == null) {
-            _statusMessage.value = "Configuration loading, please wait"
+            _statusMessage.value = MSG_CONFIG_LOADING
             return
         }
         if (_state.value == AudioState.ACTIVE || _state.value == AudioState.STARTING) {
@@ -121,7 +127,7 @@ class AudioViewModel(
                     // No dialog: an empty file is not an "invalid configuration" — the status
                     // bar carries the accurate diagnosis (PARAM would misdescribe it and offer
                     // picking from the stale, unrefreshed list)
-                    _statusMessage.value = "Configuration file is empty or format error"
+                    _statusMessage.value = MSG_CONFIG_EMPTY
                 }
                 // Cleared here, in the same main-thread message as the apply: start() reads it
                 // on the main thread too, so no admitted start can overlap the apply. The
@@ -140,7 +146,7 @@ class AudioViewModel(
         // completes (failures fall back to emergency defaults), so this cannot wedge Start
         val available = _availableConfigs.value
         if (available == null) {
-            _statusMessage.value = "Configuration loading, please wait"
+            _statusMessage.value = MSG_CONFIG_LOADING
             return
         }
         // Same refusal family as the initial-load guard above, extended to the reload window:
@@ -149,7 +155,7 @@ class AudioViewModel(
         // engine while the status claims it succeeded. The reload's completion status write
         // always replaces this text
         if (reloadInFlight) {
-            _statusMessage.value = "Configuration reloading, please wait"
+            _statusMessage.value = MSG_CONFIG_RELOADING
             return
         }
         // Same refusal family, for the empty-list variant: an empty section (or every entry

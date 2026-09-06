@@ -121,7 +121,7 @@ private fun Element.childText(name: String, default: String): String =
 /** Missing or empty element → default; present-but-unparseable text throws — the per-entry
  *  runCatching in parseConfigs then skips the entry loudly (same as an out-of-range
  *  bufferMultiplier) instead of silently testing at the default rate */
-private fun Element.childInt(name: String, default: Int): Int =
-    getElementsByTagName(name).item(0)?.textContent?.trim()?.ifEmpty { null }?.let {
-        it.toIntOrNull() ?: throw NumberFormatException("Invalid $name: \"$it\"")
-    } ?: default
+private fun Element.childInt(name: String, default: Int): Int {
+    val text = childText(name, default.toString())
+    return text.toIntOrNull() ?: throw NumberFormatException("Invalid $name: \"$text\"")
+}

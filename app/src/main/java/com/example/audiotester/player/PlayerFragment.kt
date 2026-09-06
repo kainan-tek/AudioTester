@@ -33,10 +33,11 @@ class PlayerFragment : AudioTestFragment() {
         }
 
     /** Built-in audio sources (sentinel path, see AudioConfig.hasUsableFilePath) read from assets and need no storage
-     *  permission; skip the permission gate. While configs are still loading (null) the effective config is unknown —
-     *  ask conservatively: a denied request costs nothing, but skipping a needed one makes start fail as a bogus [FILE] */
+     *  permission; skip the permission gate. A null config (load window, or an empty config list) can never reach the
+     *  engine — start() refuses first — so no permission is needed either: skipping lets the VM's accurate refusal
+     *  message surface instead of a pointless storage dialog */
     override fun permissionsForCurrentConfig(): Array<String> =
-        if (viewModel.currentConfig.value?.hasUsableFilePath != false) storagePermissions() else emptyArray()
+        if (viewModel.currentConfig.value?.hasUsableFilePath == true) storagePermissions() else emptyArray()
 
     override fun formatInfo(config: AudioConfig): String {
         val path = AudioConstants.resolvePlaybackSource(config.audioFilePath)

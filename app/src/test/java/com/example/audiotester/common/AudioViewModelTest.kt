@@ -75,6 +75,8 @@ class AudioViewModelTest {
     val instantExecutor = InstantTaskExecutorRule()
 
     private val testDispatcher = StandardTestDispatcher()
+    // Shared fixture: the one place defining the messages every test's ViewModel reports
+    private val testMessages = AudioMessages("ready", "preparing", "active", "stopped", "failed")
     private lateinit var engine: FakeEngine
     private lateinit var viewModel: AudioViewModel
 
@@ -86,7 +88,7 @@ class AudioViewModelTest {
             Mockito.mock(Application::class.java),
             engine,
             "player",
-            AudioMessages("ready", "preparing", "active", "stopped", "failed"),
+            testMessages,
             testDispatcher,
         )
         testDispatcher.scheduler.advanceUntilIdle()
@@ -202,7 +204,7 @@ class AudioViewModelTest {
             Mockito.mock(Application::class.java),
             engine,
             "player",
-            AudioMessages("ready", "preparing", "active", "stopped", "failed"),
+            testMessages,
             testDispatcher,
         )
 
@@ -262,7 +264,7 @@ class AudioViewModelTest {
             Mockito.mock(Application::class.java),
             engine,
             "player",
-            AudioMessages("ready", "preparing", "active", "stopped", "failed"),
+            testMessages,
             testDispatcher,
             loadConfigs = { emptyList() },
         )
@@ -282,7 +284,7 @@ class AudioViewModelTest {
             Mockito.mock(Application::class.java),
             engine,
             "player",
-            AudioMessages("ready", "preparing", "active", "stopped", "failed"),
+            testMessages,
             testDispatcher,
         )
 
@@ -301,7 +303,7 @@ class AudioViewModelTest {
             Mockito.mock(Application::class.java),
             engine,
             "player",
-            AudioMessages("ready", "preparing", "active", "stopped", "failed"),
+            testMessages,
             testDispatcher,
             loadConfigs = { emptyList() },
         )
@@ -322,7 +324,7 @@ class AudioViewModelTest {
             Mockito.mock(Application::class.java),
             engine,
             "player",
-            AudioMessages("ready", "preparing", "active", "stopped", "failed"),
+            testMessages,
             testDispatcher,
         )
 

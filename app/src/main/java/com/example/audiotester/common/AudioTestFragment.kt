@@ -176,12 +176,6 @@ abstract class AudioTestFragment : Fragment() {
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         configSpinner.adapter = adapter
 
-        viewModel.currentConfig.value?.let { current ->
-            // Value equality, not description: descriptions may be duplicated in custom configs
-            val index = configs.indexOf(current)
-            if (index >= 0) configSpinner.setSelection(index)
-        }
-
         configSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 val selected = configs[position]
@@ -196,9 +190,15 @@ abstract class AudioTestFragment : Fragment() {
 
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
+
+        // setAdapter resets the selection to position 0 — restore the current config (also the
+        // view-recreation path: the sticky currentConfig delivery ran before this observer, on
+        // an adapter-less spinner, so this is what re-applies the selection after setAdapter)
+        viewModel.currentConfig.value?.let { updateSpinnerSelection(it) }
     }
 
     private fun updateSpinnerSelection(config: AudioConfig) {
+        // Value equality, not description: descriptions may be duplicated in custom configs
         val index = viewModel.getAllAudioConfigs().indexOf(config)
         if (index >= 0 && index != configSpinner.selectedItemPosition) {
             configSpinner.setSelection(index)

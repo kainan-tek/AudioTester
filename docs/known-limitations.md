@@ -91,3 +91,23 @@ data size = 0xFFFFFFFF 的流式 WAV，`duration` 按无符号值计算得出约
 `AudioEngineBase.start()` 的 catch 链只有 `SecurityException` + `Exception`，start 期间若抛 `OutOfMemoryError` 会穿透 ViewModel 协程崩溃进程；两个引擎的循环则刻意 catch OOM 并报告（政策注释见各 `startLoop`）。
 
 不修理由：两条 catch 路径覆盖的是不同的分配点——loop 侧守着真实的大 Java 堆分配（`ByteArray(writeBufferSize)`，bufferMultiplier=100 时数十 MB），风险真实存在；start 侧无对应物，大缓冲是 native 分配（不足时以 IAE/ISE 浮出，已被现有 catch 链覆盖），Java 堆侧只有 Builder 内部小分配。现实时序下即使堆紧张，start 的小分配挤过去后 loop 的大分配 OOM 也由 loop catch 接住；要让 start 侧 catch 起作用需连小分配都失败的深度堆耗尽，而那时 `handleError` 自身的分配同样会崩——catch 只是换了个崩溃点。为不存在的分配点复制政策，属于为假设场景加代码。
+
+## 19. system usage 在普通安装上的确定性失败归类为 STREAM（审查发现，评估后不修）
+
+普通安装上选择 system-usage 配置（1000-1004）时，`setSystemUsageReflectively` 必然抛 IAE（缺 `MODIFY_AUDIO_ROUTING`），被 `AudioPlayer.initializeAudio` 的 `catch (Exception)` 归为 STREAM，弹窗显示"Audio system initialization failed. Please try again."——重试对确定性失败无效，文案存在误导。
+
+不修理由：失败是设计预期——这批配置为系统部署（AAOS）准备，spinner 选项名自带 `[requires system permission]` 标注，logcat 有精确诊断（usage 值 + 所需权限）。现有 8 类错误类型中无准确归属：PARAM 已被 §13 否决（设备不支持 ≠ 配置拼错），新增 UNSUPPORTED 类型需为一个自标注的设计内失败扩充错误分类法（枚举 + 双 Fragment 穷尽 when + 测试），不成比例。STREAM 是现有分类法中最不坏的选择（失败确实发生在音频系统初始化阶段）。
+
+## 20. 录音器循环无 CancellationException rethrow，与播放器不对称（审查发现，评估后不修）
+
+播放器循环因 drain 轮询的 `delay()`（挂起点）需要显式 rethrow（`AudioPlayer.startLoop`）；录音器 try 块全为阻塞调用（`audioRecord.read` / `wavFile.writeAudioData`），无挂起点——取消经 `state == ACTIVE` 守卫自然退出，`CancellationException` 在该路径上结构性无法产生，补 rethrow 是死代码。
+
+不修理由：不对称是原理性的（有无挂起点），非疏漏；`handleLoopError` 的"IDLE 先于 cancel"契约（见其文档注释）提供第二道防线。若未来录音器循环引入挂起点，届时按播放器同款补上即可。
+
+## 21. pending-error 生命周期靠多点约定而非单一 consume 机制（审查意见，评估后拒绝）
+
+审查建议把"非空 `errorMessage` 即未投递；ERROR 不留 null 消息"的不变量收敛为 VM 自带的 `consumeError()` / 一次性错误事件。拒绝理由：`errorMessage` 的 sticky LiveData 语义**本身就是投递机制**——未投递错误跨视图重建送达新观察者（finalize 失败存活于视图销毁）、消费即清除防重放，两端均有测试钉住（`failed start not yet consumed keeps the error pending` / `failed start consumed by the UI does not re-enter ERROR`）。一次性事件需重新实现该 sticky 语义才能保住这些特性，负净值。且各写入点不是同一操作的重复，而是围绕共享值的异构策略（投递 / 新动作清场 / pending 优先于停止确认 / 已消费不重入），单一 consume 无法统一。各点注释即不变量的文档。
+
+## 22. readLittleEndianInt 保留 offset 参数 + SameParameterValue 豁免（审查意见，评估后拒绝）
+
+审查建议删参硬编码 4（两个调用点均传 4）。拒绝理由：二进制解析代码中调用点显式 offset 是自文档（与 `readLittleEndianShort(fmt, 2)/(fmt, 14)` 及 `String(bytes, offset, 4, …)` 的既有风格一致），删参后结构知识被藏进函数体、出现魔法数，且与紧邻的 Short helper（多 offset、参数必要）形成特例成员。`SameParameterValue` 不检测错误 offset（其语义是"所有调用点同值 → 建议删参"），禁用它未关闭任何正确性防线；豁免的代价仅 1 注解 + 2 行注释。
