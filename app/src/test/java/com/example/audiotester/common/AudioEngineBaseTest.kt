@@ -193,6 +193,30 @@ class AudioEngineBaseTest {
         assertEquals("Default Configuration", engine.testConfig.description)
     }
 
+    /**
+     * Hook-contract enforcement: a hook returning false must have reported via handleError.
+     * The base converts a silent false into a typed, logged, listener-reported error instead
+     * of leaving start() false-and-silent (which only the ViewModel backstop could absorb,
+     * as a messageless ERROR with no engine-side trace)
+     */
+    @Test
+    fun silentHookFailure_isConvertedToTypedError() {
+        val engine = TestEngine()
+        val listener = RecordingListener()
+        engine.setListener(listener)
+        engine.startLatch.countDown()
+        engine.startResult = false   // openResources returns false without calling handleError
+
+        val started = engine.start()
+
+        assertFalse(started)
+        assertEquals(1, listener.errors.size)
+        assertEquals(AudioErrorType.STREAM, listener.errors[0].first)
+        assertEquals(AudioState.ERROR, engine.testState)
+
+        engine.release()   // hermeticity: cancel the loop scope even though start failed
+    }
+
     @Test
     fun setAudioConfigWhenIdle_isApplied() {
         val engine = TestEngine()

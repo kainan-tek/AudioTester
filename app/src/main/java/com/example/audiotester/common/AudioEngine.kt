@@ -96,8 +96,14 @@ abstract class AudioEngineBase : AudioEngine {
             // Claimed before the hooks so they see the token this start commits; a failed
             // attempt burns a token — harmless, only uniqueness matters.
             session += 1
-            if (!openResources()) return false
-            if (!initializeAudio(session)) return false
+            if (!openResources()) {
+                ensureErrorReported("openResources")
+                return false
+            }
+            if (!initializeAudio(session)) {
+                ensureErrorReported("initializeAudio")
+                return false
+            }
             state = AudioState.ACTIVE
             startLoop(session)
             engineListener?.onStarted()
@@ -112,13 +118,25 @@ abstract class AudioEngineBase : AudioEngine {
         }
     }
 
-    /** Subclass: open the session's file/resource; report failures via handleError, return false */
+    /** Subclass: open the session's file/resource; report failures via handleError, return false.
+     *  Enforced: a false without a report is converted to a STREAM error by the base */
     protected abstract fun openResources(): Boolean
 
     /** Subclass: build the AudioTrack/AudioRecord; report failures via handleError, return false.
      *  [session] is the token this start will commit — bind session-scoped callbacks (focus
-     *  loss) to it here, while the engine lock is held */
+     *  loss) to it here, while the engine lock is held.
+     *  Enforced: a false without a report is converted to a STREAM error by the base */
     protected abstract fun initializeAudio(session: Int): Boolean
+
+    /** Hook-contract enforcement: a hook returning false must have reported via handleError
+     *  (both hook call sites hold the engine lock, so calling this here is contract-conforming).
+     *  A silent false is converted into a typed, logged, listener-reported error at the
+     *  choke point instead of surfacing only as a messageless ERROR in the ViewModel backstop */
+    private fun ensureErrorReported(hook: String) {
+        if (state != AudioState.ERROR) {
+            handleError(AudioErrorType.STREAM, "$hook returned false without reporting an error")
+        }
+    }
 
     /** Subclass: launch the run loop on loopScope (assign loopJob); the loop captures [session] as its own token.
      *  Called under the engine lock with the session's resources live: capture them into locals
