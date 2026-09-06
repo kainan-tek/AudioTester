@@ -2,6 +2,7 @@ package com.example.audiotester.common
 
 import android.media.AudioAttributes
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioTrack
 import android.media.MediaRecorder
 
@@ -23,6 +24,15 @@ object AudioConstants {
     const val CONFIG_FILE_PATH = "/data/audio_configs.xml"
     const val ASSETS_CONFIG_FILE = "audio_configs.xml"
     const val DEFAULT_AUDIO_FILE = "asset://sample/48k_2ch_16bit.wav"
+
+    /** Single copy of the player's playback-source dispatch (empty → built-in default asset),
+     *  shared by AudioPlayer.openResources (what actually opens) and PlayerFragment.formatInfo
+     *  (what the info panel claims was played) — the two must name the same file */
+    fun resolvePlaybackSource(audioFilePath: String): String =
+        audioFilePath.ifEmpty { DEFAULT_AUDIO_FILE }
+
+    /** True when a resolved playback source names a bundled asset rather than a disk file */
+    fun isBundledAssetSource(source: String): Boolean = source.startsWith("asset://")
 
     // ===== Player domain =====
 
@@ -89,6 +99,21 @@ object AudioConstants {
 
     /** True for system usages (1000-1004): vehicle-only, need MODIFY_AUDIO_ROUTING + system deployment */
     fun isSystemUsage(usage: String): Boolean = resolveUsage(usage) >= SYSTEM_USAGE_START
+
+    /** Focus type per usage (exact keys): the former contains("NAVIGATION")/("VOICE_COMMUNICATION")
+     *  heuristic produced this mapping, but hung the ducking-vs-exclusive decision on string
+     *  fragments — a future MAP entry containing those fragments would silently flip GAIN vs
+     *  transient/ducking. All other Usage.MAP keys → AUDIOFOCUS_GAIN; system usages never reach
+     *  focus (requestAudioFocus skips them) */
+    private val USAGE_FOCUS_TYPES = mapOf(
+        "USAGE_ASSISTANCE_NAVIGATION_GUIDANCE" to AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK,
+        "USAGE_VOICE_COMMUNICATION" to AudioManager.AUDIOFOCUS_GAIN_TRANSIENT,
+        "USAGE_VOICE_COMMUNICATION_SIGNALLING" to AudioManager.AUDIOFOCUS_GAIN_TRANSIENT,
+    )
+
+    /** Callers pre-validate usage via [findUnknownPlayerEnum]; unknown keys default to AUDIOFOCUS_GAIN */
+    fun getFocusType(usage: String): Int =
+        USAGE_FOCUS_TYPES[usage] ?: AudioManager.AUDIOFOCUS_GAIN
 
     /** First unknown player-domain enum string ("usage: XXX"), or null if all resolve — a fallback would silently test the wrong attributes */
     fun findUnknownPlayerEnum(usage: String, contentType: String, performanceMode: String): String? = when {

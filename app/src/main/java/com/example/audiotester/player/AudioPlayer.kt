@@ -80,10 +80,10 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
             return false
         }
 
-        val path = currentConfig.audioFilePath.ifEmpty { AudioConstants.DEFAULT_AUDIO_FILE }
+        val path = AudioConstants.resolvePlaybackSource(currentConfig.audioFilePath)
         val wavFile = WavFile(path)
         this.wavFile = wavFile
-        val opened = if (path.startsWith("asset://")) {
+        val opened = if (AudioConstants.isBundledAssetSource(path)) {
             try {
                 wavFile.open(context.assets.open(path.removePrefix("asset://")))
             } catch (_: IOException) {
@@ -183,7 +183,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
 
         // Bind the focus callbacks to this session: initializeAudio runs under the engine lock
         // during start(), so a queued focus-loss stop can never land on a newer session
-        val focusType = determineFocusType()
+        val focusType = AudioConstants.getFocusType(currentConfig.usage)
 
         val focusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
             handleFocusChange(focusChange, session)
@@ -197,17 +197,6 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
         if (result) audioFocusRequest = request
 
         return result
-    }
-
-    private fun determineFocusType(): Int {
-        val usage = currentConfig.usage
-        return when {
-            usage.contains("NAVIGATION") ->
-                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
-            usage.contains("VOICE_COMMUNICATION") ->
-                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT
-            else -> AudioManager.AUDIOFOCUS_GAIN
-        }
     }
 
     /**
