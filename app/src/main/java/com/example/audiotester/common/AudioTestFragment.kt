@@ -130,14 +130,17 @@ abstract class AudioTestFragment : Fragment() {
             config?.let {
                 updateInfo()
                 updateSpinnerSelection(it)
-                if (configSpinner.adapter == null) setupConfigSpinner()
             }
         }
         viewModel.availableConfigs.observe(viewLifecycleOwner) {
-            if (configSpinner.adapter != null) {
-                // After a reload the adapter already exists; rebuild it to reflect the new config list
-                setupConfigSpinner()
-            }
+            // Unconditional owner of spinner (re)construction: initial build, reload rebuild,
+            // and recovery from an empty initial load. No adapter-null checks here — the old
+            // complementary guards in the two observers were an implicit coupling to the VM
+            // writing _availableConfigs before _currentConfig; selection is handled by
+            // updateSpinnerSelection in the currentConfig observer regardless of which value
+            // lands first. setupConfigSpinner's empty early-return makes a not-yet-buildable
+            // call a no-op
+            setupConfigSpinner()
         }
     }
 
@@ -152,6 +155,15 @@ abstract class AudioTestFragment : Fragment() {
             viewModel.start()
         }
         stopButton.setOnClickListener { viewModel.stop() }
+        // Attached once at view creation, outside setupConfigSpinner: an empty initial config
+        // load never reaches setupConfigSpinner's tail (its empty early-return precedes the
+        // old attach point), which left reload permanently unreachable — the recovery path
+        // for the empty-list state the Start refusal now points at. An empty spinner reports
+        // INVALID_POSITION; the ViewModel falls back to configs[0]
+        configSpinner.setOnLongClickListener {
+            reloadConfigurations()
+            true
+        }
     }
 
     private fun setupConfigSpinner() {
@@ -183,11 +195,6 @@ abstract class AudioTestFragment : Fragment() {
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) {}
-        }
-
-        configSpinner.setOnLongClickListener {
-            reloadConfigurations()
-            true
         }
     }
 
