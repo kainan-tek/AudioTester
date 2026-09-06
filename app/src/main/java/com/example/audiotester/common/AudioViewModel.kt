@@ -23,6 +23,10 @@ class AudioViewModel(
     private val messages: AudioMessages,
     // Injectable for deterministic interleaving control in unit tests
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    // Injectable so tests can force an empty config list: the real loader falls back to
+    // emergency defaults on failure, so only a valid-but-empty file can yield an empty list
+    private val loadConfigs: (String) -> List<AudioConfig> =
+        { section -> AudioConfig.loadConfigs(application, section) },
 ) : AndroidViewModel(application) {
 
     private val _state = MutableLiveData(AudioState.IDLE)
@@ -43,6 +47,11 @@ class AudioViewModel(
     // Only touched on the main thread (start/stop/onStarted)
     private var stopRequested = false
 
+    // Only touched on the main thread (reloadConfigurations entry / its updateUI block / start):
+    // true from reload admission until its apply lands, so Start cannot race the reload's
+    // un-guarded async setAudioConfig (same main-thread-confined pattern as stopRequested)
+    private var reloadInFlight = false
+
     init {
         setupEngineListener()
         loadConfigurations()
@@ -51,20 +60,44 @@ class AudioViewModel(
 
     private fun loadConfigurations() {
         viewModelScope.launch(ioDispatcher) {
-            val configs = AudioConfig.loadConfigs(getApplication(), section)
+            val configs = loadConfigs(section)
             updateUI {
                 _availableConfigs.value = configs
                 if (configs.isNotEmpty()) {
-                    // No status rewrite here: init already showed the ready text, and a slow
-                    // initial load landing after Start must not overwrite the preparing text
+                    // Landing rewrites the status: a Start/reload refusal during the load window
+                    // may have left "Configuration loading, please wait" here. The landing is
+                    // guaranteed IDLE (start and reload are both refused until this lands) — the
+                    // old "no status rewrite" concern (a preparing text being overwritten) was
+                    // voided by those refusals. One benign overwrite remains: a fragment-side
+                    // "Permission granted" (written directly by the permission launcher) landing
+                    // just before this is replaced — VM-side status stays authoritative
                     val defaultConfig = configs[0]
                     _currentConfig.value = engine.setAudioConfig(defaultConfig)
+                    _statusMessage.value = messages.ready
+                } else {
+                    // Same diagnosis as the reload empty branch; also recycles a stale waiting text
+                    _statusMessage.value = "Configuration file is empty or format error"
                 }
             }
         }
     }
 
     fun reloadConfigurations(previousPosition: Int) {
+        // Re-entry refusal: reloadInFlight clears when the FIRST reload lands, so an admitted
+        // second reload would reopen the start-vs-apply race after that clearing. Its waiting
+        // text is recycled by the in-flight reload's own landing status write
+        if (reloadInFlight) {
+            _statusMessage.value = "Configuration reloading, please wait"
+            return
+        }
+        // Same refusal family as start()'s not-loaded guard: a reload landing first would set
+        // _availableConfigs while the initial load is still pending, letting Start slip in
+        // before the initial landing and breaking the IDLE-at-landing invariant that the
+        // initial apply and status write rely on
+        if (_availableConfigs.value == null) {
+            _statusMessage.value = "Configuration loading, please wait"
+            return
+        }
         if (_state.value == AudioState.ACTIVE || _state.value == AudioState.STARTING) {
             updateUI {
                 _statusMessage.value = "Cannot reload configuration while active"
@@ -72,9 +105,10 @@ class AudioViewModel(
             }
             return
         }
+        reloadInFlight = true
         viewModelScope.launch(ioDispatcher) {
             // loadConfigs already catches all exceptions internally (failures fall back to emergency defaults); no extra try needed here
-            val configs = AudioConfig.loadConfigs(getApplication(), section)
+            val configs = loadConfigs(section)
             updateUI {
                 if (configs.isNotEmpty()) {
                     _availableConfigs.value = configs
@@ -89,6 +123,10 @@ class AudioViewModel(
                     // picking from the stale, unrefreshed list)
                     _statusMessage.value = "Configuration file is empty or format error"
                 }
+                // Cleared here, in the same main-thread message as the apply: start() reads it
+                // on the main thread too, so no admitted start can overlap the apply. The
+                // status writes above always overwrite the start-refusal waiting text
+                reloadInFlight = false
             }
         }
     }
@@ -100,8 +138,27 @@ class AudioViewModel(
         // the built-in default while the spinner shows configs[0], and the load's setAudioConfig
         // (rejected as ACTIVE) would permanently desync UI and engine. loadConfigs always
         // completes (failures fall back to emergency defaults), so this cannot wedge Start
-        if (_availableConfigs.value == null) {
+        val available = _availableConfigs.value
+        if (available == null) {
             _statusMessage.value = "Configuration loading, please wait"
+            return
+        }
+        // Same refusal family as the initial-load guard above, extended to the reload window:
+        // a Start admitted here would either get a never-permission-gated config accepted into
+        // a STARTING engine, or its own commit would make the reload's apply land on an ACTIVE
+        // engine while the status claims it succeeded. The reload's completion status write
+        // always replaces this text
+        if (reloadInFlight) {
+            _statusMessage.value = "Configuration reloading, please wait"
+            return
+        }
+        // Same refusal family, for the empty-list variant: an empty section (or every entry
+        // skipped as invalid) leaves the engine's constructor default as the only config —
+        // starting would run it while the spinner is empty and the info panel shows nothing.
+        // Checked after reloadInFlight so an in-flight reload (which may still land a list)
+        // keeps the more accurate waiting text
+        if (available.isEmpty()) {
+            _statusMessage.value = "No configurations available"
             return
         }
         stopRequested = false
@@ -113,11 +170,13 @@ class AudioViewModel(
             val success = engine.start()
             if (!success) {
                 updateUI {
-                    // Backstop for a `false` without any onError (engine contract violation):
-                    // nothing was reported, so un-wedging STARTING into a messageless ERROR is
-                    // correct here. When an error WAS reported, it was already consumed (dialog
-                    // + clearError → IDLE) or sits undelivered in ERROR — re-setting ERROR would
-                    // strand a terminal ERROR with a null message (consume-on-delivery invariant)
+                    // Backstop for a `false` without any onError — the only remaining such path
+                    // is a released engine (hook failures are converted to typed errors by
+                    // AudioEngineBase.ensureErrorReported). Nothing was reported, so un-wedging
+                    // STARTING into a messageless ERROR is correct here. When an error WAS
+                    // reported, it was already consumed (dialog + clearError → IDLE) or sits
+                    // undelivered in ERROR — re-setting ERROR would strand a terminal ERROR with
+                    // a null message (consume-on-delivery invariant)
                     if (_state.value == AudioState.STARTING) {
                         _state.value = AudioState.ERROR
                         _statusMessage.value = messages.failed

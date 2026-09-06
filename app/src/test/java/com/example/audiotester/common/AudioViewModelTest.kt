@@ -219,6 +219,138 @@ class AudioViewModelTest {
         assertEquals(AudioState.ACTIVE, fresh.state.value)
     }
 
+    /** Start during an in-flight reload must be refused: the reload's async apply would otherwise
+     *  race the start commit — either accepting a config the permission gate never evaluated
+     *  (bogus FILE), or reporting a rejected apply as "reloaded successfully" */
+    @Test
+    fun `start during in-flight reload is refused`() = runTest(testDispatcher.scheduler) {
+        viewModel.reloadConfigurations(0)   // IO load queued, not run — reload window open
+
+        viewModel.start()                   // must hit the reload-in-flight guard
+        assertEquals(AudioState.IDLE, viewModel.state.value)
+        assertEquals("Configuration reloading, please wait", viewModel.statusMessage.value)
+
+        advanceUntilIdle()                  // reload lands: apply + status rewritten
+        viewModel.start()
+        advanceUntilIdle()
+        engine.fireOnStarted()
+        advanceUntilIdle()
+
+        assertEquals(AudioState.ACTIVE, viewModel.state.value)
+    }
+
+    /** Normal reload (no concurrent start) still applies and reports success */
+    @Test
+    fun `reload while idle applies and reports success`() = runTest(testDispatcher.scheduler) {
+        viewModel.reloadConfigurations(0)
+        advanceUntilIdle()
+
+        assertEquals(AudioState.IDLE, viewModel.state.value)
+        assertTrue(
+            "reload success status expected, got: ${viewModel.statusMessage.value}",
+            viewModel.statusMessage.value!!.startsWith("Configuration reloaded successfully"),
+        )
+        assertEquals(viewModel.currentConfig.value, engine.currentConfig)
+    }
+
+    /** An empty initial config list (empty XML section / every entry skipped as invalid) must
+     *  refuse Start like the not-loaded case: the engine would silently run on its
+     *  constructor-default config while the spinner is empty and the info panel shows nothing */
+    @Test
+    fun `start with empty config list is refused`() = runTest(testDispatcher.scheduler) {
+        val fresh = AudioViewModel(
+            Mockito.mock(Application::class.java),
+            engine,
+            "player",
+            AudioMessages("ready", "preparing", "active", "stopped", "failed"),
+            testDispatcher,
+            loadConfigs = { emptyList() },
+        )
+        advanceUntilIdle()      // initial load lands with the injected empty list
+
+        fresh.start()           // must hit the empty-list guard
+        assertEquals(AudioState.IDLE, fresh.state.value)
+        assertEquals("No configurations available", fresh.statusMessage.value)
+    }
+
+    /** The initial-load landing must recycle the "Configuration loading, please wait" text left
+     *  by a Start refusal during the load window — the old no-rewrite comment protected a
+     *  "preparing text" scenario that the refusal itself made impossible */
+    @Test
+    fun `initial load landing recycles the waiting status`() = runTest(testDispatcher.scheduler) {
+        val fresh = AudioViewModel(
+            Mockito.mock(Application::class.java),
+            engine,
+            "player",
+            AudioMessages("ready", "preparing", "active", "stopped", "failed"),
+            testDispatcher,
+        )
+
+        fresh.start()           // refused during the load window; waiting text written
+        assertEquals("Configuration loading, please wait", fresh.statusMessage.value)
+
+        advanceUntilIdle()      // initial load lands: status must settle to ready
+        assertEquals("ready", fresh.statusMessage.value)
+    }
+
+    /** Empty-list variant: the landing replaces the waiting text with the same diagnosis the
+     *  reload empty branch uses, instead of leaving it stuck until the next user action */
+    @Test
+    fun `empty initial load landing replaces the waiting status with the diagnosis`() = runTest(testDispatcher.scheduler) {
+        val fresh = AudioViewModel(
+            Mockito.mock(Application::class.java),
+            engine,
+            "player",
+            AudioMessages("ready", "preparing", "active", "stopped", "failed"),
+            testDispatcher,
+            loadConfigs = { emptyList() },
+        )
+
+        fresh.start()
+        assertEquals("Configuration loading, please wait", fresh.statusMessage.value)
+
+        advanceUntilIdle()
+        assertEquals("Configuration file is empty or format error", fresh.statusMessage.value)
+    }
+
+    /** Reload during the initial load window must be refused (same family as the Start refusal):
+     *  a reload landing first would make Start admissible before the initial landing, breaking
+     *  the IDLE-at-landing invariant that the initial apply and status write rely on */
+    @Test
+    fun `reload during initial load window is refused`() = runTest(testDispatcher.scheduler) {
+        val fresh = AudioViewModel(
+            Mockito.mock(Application::class.java),
+            engine,
+            "player",
+            AudioMessages("ready", "preparing", "active", "stopped", "failed"),
+            testDispatcher,
+        )
+
+        fresh.reloadConfigurations(0)
+        assertEquals("Configuration loading, please wait", fresh.statusMessage.value)
+
+        advanceUntilIdle()
+        assertEquals("ready", fresh.statusMessage.value)   // the reload never landed its success text
+    }
+
+    /** A second reload while one is already in flight must be refused: reloadInFlight clears
+     *  when the FIRST reload lands, so an admitted re-entry would reopen the start-vs-apply
+     *  race after that clearing (the exact race the Start-side flag guard closes) */
+    @Test
+    fun `reload during in-flight reload is refused`() = runTest(testDispatcher.scheduler) {
+        viewModel.reloadConfigurations(0)   // admitted: flag set, IO load queued
+        viewModel.reloadConfigurations(0)   // must hit the re-entry guard
+
+        assertEquals("Configuration reloading, please wait", viewModel.statusMessage.value)
+
+        advanceUntilIdle()                  // the first reload still lands normally
+        assertEquals(AudioState.IDLE, viewModel.state.value)
+        assertTrue(
+            "first reload must apply and report success, got: ${viewModel.statusMessage.value}",
+            viewModel.statusMessage.value!!.startsWith("Configuration reloaded successfully"),
+        )
+    }
+
     /** Foreground failure: the fragment consumes the error (dialog + clearError → IDLE); the
      *  start-failure backstop must not re-enter ERROR and strand a messageless terminal error */
     @Test
