@@ -19,8 +19,8 @@
       <contentType>CONTENT_TYPE_MUSIC</contentType>
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
       <bufferMultiplier>4</bufferMultiplier>
-      <audioFilePath>/data/96k_2ch_32bit.wav</audioFilePath>
-      <description>Hi-Res Media Playback (96kHz Stereo 32-bit)</description>
+      <audioFilePath>/data/float_96k_2ch.wav</audioFilePath>
+      <description>Hi-Res Media Playback (96kHz Stereo 32-bit Float)</description>
     </config>
     <config>
       <usage>USAGE_VOICE_COMMUNICATION</usage>

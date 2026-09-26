@@ -35,7 +35,12 @@ data class AudioConfig(
 
     companion object {
         private const val TAG = "AudioConfig"
-        /** Single source of default values: data class defaults, parseConfigs fallbacks, and getDefaultConfigs are all based on this */
+        /**
+         * Single source of default values: data class defaults, parseConfigs fallbacks, and getDefaultConfigs
+         * are all based on this. Sole intentional exception: a parsed entry without <description> falls back to
+         * "Custom configuration" (not DEFAULT.description) to distinguish custom entries from the engine's
+         * built-in default config.
+         */
         private val DEFAULT = AudioConfig()
 
         fun loadConfigs(context: Context, section: String): List<AudioConfig> {

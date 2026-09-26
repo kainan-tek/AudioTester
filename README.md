@@ -12,7 +12,7 @@
 
 - **18 种音频场景**（媒体/语音通话/通话信令/闹钟/通知/通知事件/铃声/游戏/导航/辅助/系统提示音/语音助手/96kHz 高解析 + 5 种系统 usage：紧急/安全/车辆状态/广播/扬声器清理），每种可配 usage/contentType/performanceMode；系统 usage 需系统部署，见「高级：系统级部署」
 - 内置 20s 粉红噪声音源（`asset://sample/48k_2ch_16bit.wav`），默认无需推 WAV；也可配置 `/data/xx.wav` 真实文件
-- 完整音频支持：**1-16 声道**（含 5.1/7.1/5.1.4/7.1.4）、**8kHz-192kHz**、**8/16/24/32 位 PCM**
+- 完整音频支持：**1-16 声道**（含 5.1/7.1/5.1.4/7.1.4）、**8kHz-192kHz**、**8/16/24/32 位 PCM**；播放另支持 **32-bit float**（IEEE float WAV）
 - 音频焦点管理：焦点被抢占时自动停止
 
 ### 录音
@@ -87,6 +87,7 @@ adb logcat -s AudioPlayer AudioRecorder
 ## 已知限制
 
 - 录音 `channelCount` 仅支持 {1,2,8,10,12,14,16}（输入通道掩码可表示）；4/6 等其他值会被系统静默录成立体声
+- 播放不支持 64-bit float WAV（Android 无对应编码），会明确报 FILE 错误；32-bit float 通过 `AudioTrack.write(float[])` 播放
 - AAOS 模拟器：从快照恢复后短时间内，音频焦点请求可能被拒（点 Start 报错），等待几分钟重试即可
 
 ## 高级：系统级部署
@@ -148,6 +149,7 @@ adb reboot                                      # 6. 重启生效
 5. 长按 Spinner 重载配置生效（含 XML 注释）
 6. 点击 Start 才弹权限；拒绝后有明确提示
 7. 普通安装下系统专属配置报错且不影响其他配置
+8. 指向 `/data` 的 32-bit float WAV（Hi-Res Float 条目）可播放，logcat 显示 `32bit(float)`
 
 ## 相关项目
 

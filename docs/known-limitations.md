@@ -10,7 +10,7 @@
 
 ## 2. RIFF 奇数 chunk 写侧不补 pad 字节
 
-data chunk 长度为奇数时 RIFF size 为奇数（仅 8-bit 单声道可能触发，16/24/32 位路径恒为偶数）。多数播放器以 data chunk size 为准，播放不受影响；严格 RIFF 校验器会警告。读侧已正确处理 pad（写读不对称）。
+data chunk 长度为奇数时 RIFF size 为奇数（仅 blockAlign 为奇数的配置触发：8-bit 单声道、24-bit 单声道——后者 blockAlign=3，帧数为奇即奇；16/32 位与一切多声道恒为偶数。2026-09-26 勘误：原文误作"仅 8-bit 单声道"，漏计 24-bit 单声道）。多数播放器以 data chunk size 为准，播放不受影响；严格 RIFF 校验器会警告。读侧已正确处理 pad（写读不对称）。
 
 ## 3. 部分写后头部声明值可能略小于磁盘实际
 

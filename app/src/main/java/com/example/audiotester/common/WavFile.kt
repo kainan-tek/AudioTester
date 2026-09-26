@@ -23,13 +23,15 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
         private const val WAVE_OFFSET = 8
         private const val FMT_CHUNK_SIZE = 16
         private const val AUDIO_FORMAT_PCM = 1
+        private const val WAVE_FORMAT_IEEE_FLOAT = 3
         private const val WAVE_FORMAT_EXTENSIBLE = 0xFFFE
     }
 
     private var fileInputStream: InputStream? = null
     private var fileOutputStream: FileOutputStream? = null
 
-    /** A close already failed to patch the header; replayed so later close() calls report the broken file */
+    /** A close already failed to patch the header; replayed so later close() calls report the broken file.
+     *  Reset by [create]: the failure belongs to the previous write session, not the new one */
     private var finalizeFailed = false
 
     /** Bytes left in the declared data chunk (read side); reset by [close] */
@@ -45,6 +47,11 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
     var channelCount: Int = 0
         private set
     var bitsPerSample: Int = 0
+        private set
+
+    /** True when the parsed format tag is IEEE float (3, incl. the EXTENSIBLE subformat); false = integer PCM.
+     *  Distinguishes a 32-bit float file from a 32-bit integer PCM one — same bits-per-sample, different encoding */
+    var isFloatFormat: Boolean = false
         private set
 
     /** Audio data size in bytes: parsed from the header on the read side, accumulated writes on the write side */
@@ -136,8 +143,19 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
                 if (size % 2 != 0L) skip(stream, 1)
             }
 
-            if (audioFormat != AUDIO_FORMAT_PCM) {
-                Log.e(TAG, "Unsupported WAV format (only PCM=1 is supported)")
+            // Assigned from the loop-local final tag: covers both the plain fmt chunk and the
+            // EXTENSIBLE subformat (whose GUID's first 2 bytes replaced audioFormat in-scan)
+            isFloatFormat = audioFormat == WAVE_FORMAT_IEEE_FLOAT
+            if (audioFormat != AUDIO_FORMAT_PCM && audioFormat != WAVE_FORMAT_IEEE_FLOAT) {
+                Log.e(TAG, "Unsupported WAV format (only PCM=1 or IEEE float=3 is supported)")
+                return false
+            }
+            // Float WAVs are 32-bit only: Android has no double-precision playback encoding
+            // (ENCODING_PCM_FLOAT is single precision), so 64-bit files are rejected explicitly
+            // instead of being misread as 32-bit integer PCM. Read-side only — validateParameters
+            // is shared with the write side, which always produces integer PCM
+            if (audioFormat == WAVE_FORMAT_IEEE_FLOAT && bitsPerSample != 32) {
+                Log.e(TAG, "Unsupported float WAV: $bitsPerSample-bit (only 32-bit float is supported)")
                 return false
             }
             if (!validateParameters(sampleRate, channelCount, bitsPerSample)) {
@@ -148,7 +166,8 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
             fileInputStream = stream
             opened = true
             Log.i(
-                TAG, "WAV opened: ${sampleRate}Hz, ${channelCount}ch, ${bitsPerSample}bit, " +
+                TAG, "WAV opened: ${sampleRate}Hz, ${channelCount}ch, " +
+                    "${bitsPerSample}bit${if (isFloatFormat) "(float)" else ""}, " +
                     "duration ${String.format(java.util.Locale.US, "%.2f", duration)}s"
             )
             return true
@@ -225,6 +244,7 @@ class WavFile(private val filePath: String, private val maxDataBytes: Long = Int
             file.parentFile?.mkdirs()
             fileOutputStream = FileOutputStream(file)
             dataLength = 0L
+            finalizeFailed = false
             writeInitialWavHeader()
             Log.i(TAG, "WAV created: ${sampleRate}Hz, ${channelCount}ch, ${bitsPerSample}bit")
             true

@@ -12,6 +12,8 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
 import java.io.InputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.concurrent.CountDownLatch
 
 class WavFileTest {
@@ -453,6 +455,24 @@ class WavFileTest {
     }
 
     @Test
+    fun close_failedHeaderPatch_isResetByCreate() {
+        // A patch failure belongs to its own write session: a second session on the SAME
+        // instance (create() again) must start with a clean finalizeFailed, or its successful
+        // close is replayed as false, reporting a broken file that is actually fine
+        val file = File(tempFolder.root, "reset.wav")
+        val writer = WavFile(file.absolutePath)
+        assertTrue(writer.create(8000, 2, 16))
+        assertTrue(writer.writeAudioData(ByteArray(100), 0, 100))
+        assertTrue(file.setReadOnly())   // RandomAccessFile("rw") in the header patch now fails
+        assertFalse(writer.close())      // session 1: patch failed, remembered
+        assertTrue(file.setWritable(true))
+        assertTrue(writer.create(8000, 2, 16))   // session 2 on the same instance
+        assertTrue(writer.writeAudioData(ByteArray(100), 0, 100))
+        assertTrue(writer.close())       // must reflect session 2's success, not session 1's failure
+        assertTrue(writer.close())       // replay of the successful session
+    }
+
+    @Test
     fun openTruncatedExtensible_failsCleanly() {
         // fmt declares 16 bytes but tag=0xFFFE (EXTENSIBLE without the GUID): must fail cleanly rather than throw AIOOBE
         val data = ByteArray(8)
@@ -476,5 +496,69 @@ class WavFileTest {
 
         val reader = WavFile(file.absolutePath)
         assertTrue(!reader.open())  // Returns false cleanly; no ArrayIndexOutOfBoundsException thrown
+    }
+
+    @Test
+    fun openFloatWav_parsesFormatAndRoundTrips() {
+        // Format tag 3 (IEEE float), 32-bit: the player's float path keys on isFloatFormat —
+        // tag 3 must NOT be misread as integer PCM-32 (same bits-per-sample, different encoding)
+        val floats = floatArrayOf(0.25f, -0.5f, 1.0f, -1.0f, 0.125f, -0.125f)
+        val data = ByteArray(floats.size * 4)
+        ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
+            .asFloatBuffer().put(floats)
+        val header = ByteArray(44).also { h ->
+            "RIFF".toByteArray().copyInto(h, 0)
+            h.putLeInt(4, 36 + data.size)
+            "WAVE".toByteArray().copyInto(h, 8)
+            "fmt ".toByteArray().copyInto(h, 12)
+            h.putLeInt(16, 16)                // fmt chunk size
+            h.putLeShort(20, 3)               // WAVE_FORMAT_IEEE_FLOAT
+            h.putLeShort(22, 2)               // channels
+            h.putLeInt(24, 96000)             // sample rate
+            h.putLeInt(28, 96000 * 2 * 4)     // byte rate
+            h.putLeShort(32, 8)               // block align
+            h.putLeShort(34, 32)              // bits per sample
+            "data".toByteArray().copyInto(h, 36)
+            h.putLeInt(40, data.size)
+        }
+        val file = File(tempFolder.root, "float.wav")
+        file.writeBytes(header + data)
+
+        val reader = WavFile(file.absolutePath)
+        assertTrue(reader.open())
+        assertTrue(reader.isFloatFormat)
+        assertEquals(96000, reader.sampleRate)
+        assertEquals(2, reader.channelCount)
+        assertEquals(32, reader.bitsPerSample)
+        val readBack = ByteArray(data.size)
+        assertEquals(data.size, reader.readData(readBack, 0, readBack.size))
+        assertArrayEquals(data, readBack)
+        reader.close()
+    }
+
+    @Test
+    fun openDoubleFloatWav_rejectedCleanly() {
+        // 64-bit IEEE float (double) has no Android playback encoding: must fail cleanly
+        // instead of falling through as 32-bit float or integer PCM
+        val header = ByteArray(44).also { h ->
+            "RIFF".toByteArray().copyInto(h, 0)
+            h.putLeInt(4, 36 + 16)
+            "WAVE".toByteArray().copyInto(h, 8)
+            "fmt ".toByteArray().copyInto(h, 12)
+            h.putLeInt(16, 16)                // fmt chunk size
+            h.putLeShort(20, 3)               // IEEE float
+            h.putLeShort(22, 2)               // channels
+            h.putLeInt(24, 96000)             // sample rate
+            h.putLeInt(28, 96000 * 2 * 8)     // byte rate
+            h.putLeShort(32, 16)              // block align
+            h.putLeShort(34, 64)              // bits per sample (double)
+            "data".toByteArray().copyInto(h, 36)
+            h.putLeInt(40, 16)
+        }
+        val file = File(tempFolder.root, "float64.wav")
+        file.writeBytes(header + ByteArray(16))
+
+        val reader = WavFile(file.absolutePath)
+        assertTrue(!reader.open())
     }
 }

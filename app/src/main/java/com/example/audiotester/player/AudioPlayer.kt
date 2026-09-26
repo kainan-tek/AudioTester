@@ -18,6 +18,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.IOException
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -124,7 +126,11 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
             if (!validateAudioParameters(wavFile)) return false
 
             val channelMask = AudioConstants.getOutputChannelMask(wavFile.channelCount)
-            val audioFormat = AudioConstants.getFormatFromBitDepth(wavFile.bitsPerSample)
+            // Float WAVs (format tag 3) must use ENCODING_PCM_FLOAT: the byte[] write() rejects a
+            // float track (ERROR_INVALID_OPERATION, AudioTrack.java) and write(float[]) is the
+            // only float path — bitsPerSample alone cannot tell float-32 from integer PCM-32
+            val audioFormat = if (wavFile.isFloatFormat) AudioFormat.ENCODING_PCM_FLOAT
+                else AudioConstants.getFormatFromBitDepth(wavFile.bitsPerSample)
             val minBufferSize = AudioTrack.getMinBufferSize(wavFile.sampleRate, channelMask, audioFormat)
             Log.i(TAG, "getMinBufferSize: $minBufferSize bytes")
 
@@ -241,10 +247,16 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                     }
                 // Round down to whole frames: write() only consumes whole frames; a leftover
                 // partial frame can never be written (returns 0) and non-frame-aligned blocks
-                // would drop bytes every block, shifting all subsequent data into noise
-                val writeBufferSize = rawWriteBufferSize / bytesPerFrame * bytesPerFrame
+                // would drop bytes every block, shifting all subsequent data into noise.
+                // coerceAtLeast(1) guards the theoretical case of a track buffer smaller than
+                // the mode's divisor (< 4 frames): a zero-size buffer would make readData
+                // return -1 (its EOF sentinel) and misdiagnose a healthy file as TRUNCATED
+                val writeBufferSize = (rawWriteBufferSize / bytesPerFrame).coerceAtLeast(1) * bytesPerFrame
 
                 val buffer = ByteArray(writeBufferSize)
+                // Same size family as buffer, inside the try: covered by the catch(OutOfMemoryError)
+                // below, same "report instead of crash" policy. Half the bytes (4 bytes per float)
+                val floatBuffer = if (wavFile.isFloatFormat) FloatArray(writeBufferSize / 4) else null
                 var totalBytes = 0L
                 var lastLoggedBytes = 0L
 
@@ -278,8 +290,18 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
 
                     // The blocking write()'s internal drain loop either consumes all whole frames
                     // or errors out (partial success is always followed by an error code) — treat
-                    // a short write as an exception and fail loudly to expose platform issues
-                    val bytesWritten = audioTrack.write(buffer, 0, alignedBytes)
+                    // a short write as an exception and fail loudly to expose platform issues.
+                    // Float tracks reject the byte[] write (ERROR_INVALID_OPERATION): bulk-convert
+                    // the block through a little-endian float view and use write(float[]) instead.
+                    // Its return unit is floats, NOT bytes — scale back here so the completeness
+                    // check below stays shared between both paths
+                    val bytesWritten = if (floatBuffer != null) {
+                        ByteBuffer.wrap(buffer, 0, alignedBytes).order(ByteOrder.LITTLE_ENDIAN)
+                            .asFloatBuffer().get(floatBuffer, 0, alignedBytes / 4)
+                        audioTrack.write(floatBuffer, 0, alignedBytes / 4, AudioTrack.WRITE_BLOCKING) * 4
+                    } else {
+                        audioTrack.write(buffer, 0, alignedBytes)
+                    }
                     if (bytesWritten != alignedBytes) {
                         throw IOException("AudioTrack write incomplete: $bytesWritten/$alignedBytes")
                     }

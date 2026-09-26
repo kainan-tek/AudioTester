@@ -12,7 +12,7 @@ Top tabs switch between **Playback** / **Recording**; the two features are mutua
 
 - **18 audio scenarios** (media/voice call/call signaling/alarm/notification/notification event/ringtone/game/navigation/accessibility/system sound/voice assistant/96kHz hi-res + 5 system usages: emergency/safety/vehicle status/announcement/speaker cleanup), each configurable via usage/contentType/performanceMode; system usages require system deployment (see "Advanced: System Deployment")
 - Built-in 20s pink noise source (`asset://sample/48k_2ch_16bit.wav`), no WAV file needed by default; can also use a `/data/xx.wav` real file
-- Full audio support: **1-16 channels** (incl. 5.1/7.1/5.1.4/7.1.4), **8kHz-192kHz**, **8/16/24/32-bit PCM**
+- Full audio support: **1-16 channels** (incl. 5.1/7.1/5.1.4/7.1.4), **8kHz-192kHz**, **8/16/24/32-bit PCM**; playback also supports **32-bit float** (IEEE float WAV)
 - Audio focus management: auto-stops when focus is taken
 
 ### Recording
@@ -87,6 +87,7 @@ External hot-reload: place the file at `/data/audio_configs.xml` (takes priority
 ## Known Limitations
 
 - Recording `channelCount`: only {1,2,8,10,12,14,16} take effect (representable as input channel masks); other values such as 4/6 are silently recorded as stereo
+- Playback does not support 64-bit float WAV (no matching Android encoding); it fails with a clear FILE error. 32-bit float plays via `AudioTrack.write(float[])`
 - AAOS emulator: shortly after restoring from a snapshot, audio focus requests may be rejected (Start reports an error); retry after a few minutes
 
 ## Advanced: System-level Deployment
@@ -147,6 +148,7 @@ Device-dependent items, verified manually:
 5. Long-press Spinner reload works (including XML comments)
 6. Permissions are requested on Start tap; clear feedback when denied
 7. System-only configs fail on normal install without affecting other configs
+8. A 32-bit float WAV on `/data` (the Hi-Res Float entry) plays, logcat shows `32bit(float)`
 
 ## Related Projects
 
