@@ -17,7 +17,7 @@ Top tabs switch between **Playback** / **Recording**; the two features are mutua
 
 ### Recording
 
-- **15 audio sources** (default/mic/voice uplink/downlink/bidirectional/camcorder/voice recognition/remote submix/unprocessed/voice performance/system-level sources)
+- **15 audio sources** (default/mic/voice uplink/downlink/bidirectional/voice communication/camcorder/voice recognition/remote submix/unprocessed/voice performance/system-level sources)
 - Configurable sample rate/channels/bit depth, outputs **valid WAV with correct header**
 - Defaults to an auto-named path in the app's private directory; system apps can configure a fixed `/data/` path (see "Advanced: System-level Deployment")
 
@@ -57,7 +57,7 @@ adb logcat -s AudioPlayer AudioRecorder
 
 | Field | Section | Default | Notes |
 | --- | --- | --- | --- |
-| `usage` | player | `USAGE_MEDIA` | audio usage; 12 scenarios in the bundled config |
+| `usage` | player | `USAGE_MEDIA` | audio usage; the bundled configs cover 12 SDK usages + 5 system usages; system usages require system deployment |
 | `contentType` | player | `CONTENT_TYPE_MUSIC` | content type |
 | `performanceMode` | player | `PERFORMANCE_MODE_POWER_SAVING` | power saving / low latency |
 | `bufferMultiplier` | both | `2` | min-buffer multiplier; must be a positive integer, invalid entries are skipped. Player-side floors: power saving >= 2 (write chunk = 2x min-buffer), low latency >= 1, otherwise start fails with a PARAM error |
@@ -89,6 +89,8 @@ External hot-reload: place the file at `/data/audio_configs.xml` (takes priority
 - Recording `channelCount`: only {1,2,8,10,12,14,16} take effect (representable as input channel masks); other values such as 4/6 are silently recorded as stereo
 - Playback does not support 64-bit float WAV (no matching Android encoding); it fails with a clear FILE error. 32-bit float plays via `AudioTrack.write(float[])`
 - AAOS emulator: shortly after restoring from a snapshot, audio focus requests may be rejected (Start reports an error); retry after a few minutes
+
+> For the full ledger of adjudicated trade-offs and rejections, see [docs/known-limitations.md](docs/known-limitations.md).
 
 ## Advanced: System-level Deployment
 
@@ -126,7 +128,8 @@ adb root && adb remount                        # 3. remount system partition for
 adb push AudioTester.apk /system/priv-app/AudioTester/AudioTester.apk  # 4. filename must match the dir name
 # 5. (recommended) add privapp-permissions-com.example.audiotester.xml under /system/etc/permissions/
 #    include signature permissions: CAPTURE_AUDIO_OUTPUT / CAPTURE_AUDIO_HOTWORD / MODIFY_AUDIO_ROUTING
-#    (enables system recording sources ECHO_REFERENCE/RADIO_TUNER/HOTWORD/ULTRASOUND)
+#    (enables the system recording sources ECHO_REFERENCE/RADIO_TUNER/HOTWORD/ULTRASOUND
+#     and the system usage playback USAGE_EMERGENCY etc.)
 adb reboot                                      # 6. reboot to apply
 ```
 
@@ -134,7 +137,11 @@ adb reboot                                      # 6. reboot to apply
 
 ## Development
 
-Replace the built-in source: edit `tools/gen_pink_noise_wav.py` and re-run `python tools/gen_pink_noise_wav.py` (defaults to the 48k bundled sample; `python tools/gen_pink_noise_wav.py 96k32bit` generates the hi-res test file).
+`tools/gen_float_wav.py`: a pure-stdlib 32-bit float WAV generator (96kHz stereo, 30s of 440Hz sine; tweak the SR/CH/SECS constants at the top of the script), used to produce the test file played by the Hi-Res Float config:
+
+```bash
+python tools/gen_float_wav.py /data/float_96k_2ch.wav   # push to the device and play via the Hi-Res Float entry (see Manual Verification #8)
+```
 
 ## Manual Verification Checklist
 

@@ -17,7 +17,7 @@
 
 ### 录音
 
-- **15 种音源**（默认/麦克风/语音上行/下行/双向/摄像/语音识别/远程混音/未处理/语音性能/系统级音源）
+- **15 种音源**（默认/麦克风/语音上行/下行/双向/语音通信/摄像/语音识别/远程混音/未处理/语音性能/系统级音源）
 - 可配采样率/声道/位深，输出**头信息正确的有效 WAV**
 - 默认输出到 App 私有目录自动命名；系统应用可配置 `/data/` 固定路径（见「高级：系统级部署」）
 
@@ -57,7 +57,7 @@ adb logcat -s AudioPlayer AudioRecorder
 
 | 字段 | 适用 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `usage` | 播放 | `USAGE_MEDIA` | 音频用途，13 种 SDK 场景 + 5 种系统场景见内置配置；系统场景需系统部署 |
+| `usage` | 播放 | `USAGE_MEDIA` | 音频用途；内置配置覆盖 12 种 SDK usage + 5 种系统 usage；系统 usage 需系统部署 |
 | `contentType` | 播放 | `CONTENT_TYPE_MUSIC` | 内容类型 |
 | `performanceMode` | 播放 | `PERFORMANCE_MODE_POWER_SAVING` | 省电 / 低延迟 |
 | `bufferMultiplier` | 两者 | `2` | 最小缓冲倍数；须为正整数，非法条目被跳过。播放侧下限：省电 ≥ 2（写块 2×最小缓冲）、低延迟 ≥ 1，不满足时启动报 PARAM 错误 |
@@ -89,6 +89,8 @@ adb logcat -s AudioPlayer AudioRecorder
 - 录音 `channelCount` 仅支持 {1,2,8,10,12,14,16}（输入通道掩码可表示）；4/6 等其他值会被系统静默录成立体声
 - 播放不支持 64-bit float WAV（Android 无对应编码），会明确报 FILE 错误；32-bit float 通过 `AudioTrack.write(float[])` 播放
 - AAOS 模拟器：从快照恢复后短时间内，音频焦点请求可能被拒（点 Start 报错），等待几分钟重试即可
+
+> 完整的问题取舍与拒绝条目台账见 [docs/known-limitations.md](docs/known-limitations.md)。
 
 ## 高级：系统级部署
 
@@ -135,7 +137,11 @@ adb reboot                                      # 6. 重启生效
 
 ## 开发
 
-内置音源替换：修改 `tools/gen_pink_noise_wav.py` 后重新运行 `python tools/gen_pink_noise_wav.py`（默认生成 48k 内置音源；`python tools/gen_pink_noise_wav.py 96k32bit` 生成 hi-res 测试文件）。
+`tools/gen_float_wav.py`：纯标准库的 32-bit float WAV 生成器（96kHz 立体声、30 秒 440Hz 正弦；采样率/声道/时长改脚本顶部常量），用于生成 Hi-Res Float 配置播放的测试文件：
+
+```bash
+python tools/gen_float_wav.py /data/float_96k_2ch.wav   # 推到设备后配合 Hi-Res Float 条目实测（见手动验证清单第 8 条）
+```
 
 ## 手动验证清单
 
