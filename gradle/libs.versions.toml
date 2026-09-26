@@ -1,13 +1,13 @@
 [versions]
-agp = "9.4.0"
+agp = "9.4.1"
 appcompat = "1.8.0"
 archCoreTesting = "2.2.0"
-coreKtx = "1.19.0"
+coreKtx = "1.19.1"
 junit = "4.13.2"
 kotlinxCoroutinesAndroid = "1.11.0"
 lifecycle = "2.11.0"
 material = "1.14.0"
-mockito = "5.23.0"
+mockito = "5.24.0"
 viewpager2 = "1.1.0"
 
 [libraries]
