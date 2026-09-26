@@ -277,6 +277,11 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                 val buffer = ByteArray(writeBufferSize)
                 // Same size family as buffer, inside the try: covered by the catch(OutOfMemoryError)
                 // below, same "report instead of crash" policy. Half the bytes (4 bytes per float)
+                // NOT dead code despite Android Studio's "always false" hint on the null check
+                // below — a constant-propagation false positive: the IDE reads the field
+                // initializer (false at construction) as its final value, missing the real
+                // assignment inside WavFile.open(), which has long completed by the time
+                // startLoop runs (engine start order: openResources → initializeAudio → startLoop)
                 val floatBuffer = if (wavFile.isFloatFormat) FloatArray(writeBufferSize / 4) else null
                 var totalBytes = 0L
                 var lastLoggedBytes = 0L
