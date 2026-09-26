@@ -41,6 +41,10 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
     private var wavFile: WavFile? = null
+    // getMinBufferSize result from the last successful initializeAudio, engine-lock confined:
+    // the startLoop write chunking is defined as a multiple of it (1x low latency / 2x power
+    // saving), not as a fraction of the track buffer
+    private var minBufferSizeBytes: Int = 0
 
     override val alreadyActiveMessage = "Already playing"
     override val permissionDeniedMessage = "Permission denied"
@@ -59,6 +63,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
             Log.e(TAG, "Error releasing AudioTrack", e)
         }
         audioTrack = null
+        minBufferSizeBytes = 0
 
         try {
             abandonAudioFocus()
@@ -139,6 +144,7 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
                 return false
             }
 
+            minBufferSizeBytes = minBufferSize
             val bufferSize = minBufferSize * currentConfig.bufferMultiplier
 
             audioTrack = AudioTrack.Builder().setAudioAttributes(audioAttributes).setAudioFormat(
@@ -174,6 +180,17 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
         }
         if (!AudioConstants.isValidOutputChannelCount(wavFile.channelCount)) {
             handleError(AudioErrorType.PARAM, "Unsupported channel count: ${wavFile.channelCount} (supported: 1/2/4/6/8/10/12/16)")
+            return false
+        }
+        // The startLoop write chunk is a fixed 1x (low latency) / 2x (power saving, none)
+        // multiple of minBufferSize with no clamping — it must fit the track buffer
+        // (buffer = multiplier x minBufferSize), hence the per-mode floor. The 1x chunk
+        // is covered by the parse-time 1..100 range; player-only rule lives here, not in
+        // the shared AudioConfig parser (recorder entries parse with a meaningless
+        // default performanceMode and legitimately use multiplier 1)
+        if (AudioConstants.getPerformanceMode(currentConfig.performanceMode) !=
+            AudioTrack.PERFORMANCE_MODE_LOW_LATENCY && currentConfig.bufferMultiplier < 2) {
+            handleError(AudioErrorType.PARAM, "bufferMultiplier ${currentConfig.bufferMultiplier} too small: power saving writes 2x minBufferSize per chunk, the track buffer must be at least 2x (multiplier >= 2)")
             return false
         }
         return true
@@ -238,20 +255,24 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
             // audio objects concurrently, so even buffer setup must funnel through handleLoopError
             try {
                 val bytesPerFrame = wavFile.blockAlign
-                val audioTrackBufferSize = audioTrack.bufferSizeInFrames * bytesPerFrame
-                val rawWriteBufferSize =
+                // Write chunking rule, independent of the configured buffer size: chunks
+                // are strictly 1x (low latency — smallest scheduling quantum, lowest
+                // enqueue latency) or 2x (power saving — fewer wakeups per second) of
+                // minBufferSize, with no runtime clamping. The chunk always fits the
+                // track buffer because the multiplier is bounded per mode
+                // (>= 1 for LL, >= 2 for the 2x modes — enforced in validateAudioParameters)
+                val writeChunkBytes =
                     when (AudioConstants.getPerformanceMode(currentConfig.performanceMode)) {
-                        AudioTrack.PERFORMANCE_MODE_LOW_LATENCY -> audioTrackBufferSize / 4
-                        AudioTrack.PERFORMANCE_MODE_POWER_SAVING -> audioTrackBufferSize / 2
-                        else -> audioTrackBufferSize / 3
+                        AudioTrack.PERFORMANCE_MODE_LOW_LATENCY -> minBufferSizeBytes
+                        else -> 2 * minBufferSizeBytes
                     }
                 // Round down to whole frames: write() only consumes whole frames; a leftover
                 // partial frame can never be written (returns 0) and non-frame-aligned blocks
                 // would drop bytes every block, shifting all subsequent data into noise.
-                // coerceAtLeast(1) guards the theoretical case of a track buffer smaller than
-                // the mode's divisor (< 4 frames): a zero-size buffer would make readData
+                // coerceAtLeast(1) guards the theoretical case of a chunk rounding down to
+                // zero (< bytesPerFrame bytes): a zero-size buffer would make readData
                 // return -1 (its EOF sentinel) and misdiagnose a healthy file as TRUNCATED
-                val writeBufferSize = (rawWriteBufferSize / bytesPerFrame).coerceAtLeast(1) * bytesPerFrame
+                val writeBufferSize = (writeChunkBytes / bytesPerFrame).coerceAtLeast(1) * bytesPerFrame
 
                 val buffer = ByteArray(writeBufferSize)
                 // Same size family as buffer, inside the try: covered by the catch(OutOfMemoryError)

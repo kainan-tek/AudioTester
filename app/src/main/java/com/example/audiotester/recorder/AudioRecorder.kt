@@ -30,6 +30,10 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
     // on locals captured in startLoop (see there)
     private var audioRecord: AudioRecord? = null
     private var wavFile: WavFile? = null
+    // getMinBufferSize result from the last successful initializeAudio, engine-lock confined:
+    // the startLoop read chunking is a fixed multiple of it (1x), not a fraction of the
+    // track buffer — mirroring the player's write chunking
+    private var minBufferSizeBytes: Int = 0
 
     override val alreadyActiveMessage = "Already recording"
     override val permissionDeniedMessage = "Recording permission denied"
@@ -48,6 +52,7 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
             Log.e(TAG, "Error releasing AudioRecord", e)
         }
         audioRecord = null
+        minBufferSizeBytes = 0
 
         wavFile?.let {
             // A failed header patch leaves data behind a placeholder header — an unreadable
@@ -127,6 +132,7 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
                 return false
             }
 
+            minBufferSizeBytes = minBufferSize
             val bufferSize = minBufferSize * currentConfig.bufferMultiplier
 
             audioRecord = AudioRecord.Builder()
@@ -188,10 +194,17 @@ class AudioRecorder(private val context: Context) : AudioEngineBase() {
             // Everything after launch is inside the try: a stop landing mid-prologue releases the
             // audio objects concurrently, so even buffer setup must funnel through handleLoopError
             try {
-                // bufferSizeInFrames / 3 keeps the read buffer a whole number of frames: a read
-                // returning a partial frame would shift every block written to the WAV into
-                // misaligned noise (the player rounds its write buffer the same way)
-                val readBufferSize = audioRecord.bufferSizeInFrames / 3 * wavFile.blockAlign
+                // Read chunking rule, mirroring the player's write chunking: a fixed 1x
+                // minBufferSize per read, independent of the configured buffer size —
+                // the multiplier only sets overrun headroom (the default 2 leaves a ~50%
+                // backlog pool). The chunk always fits the track buffer: the multiplier
+                // floor of 1 is covered by the shared parse-time 1..100 range.
+                // Round down to whole frames: a partial frame can never be written to the
+                // WAV and would shift every subsequent block into misaligned noise.
+                // coerceAtLeast(1) guards the theoretical case of a chunk rounding down
+                // to zero (< blockAlign bytes): a zero-size buffer would make
+                // AudioRecord.read return 0 and abort a healthy recording as a STREAM error
+                val readBufferSize = (minBufferSizeBytes / wavFile.blockAlign).coerceAtLeast(1) * wavFile.blockAlign
 
                 val buffer = ByteArray(readBufferSize)
                 var totalBytes = 0L

@@ -60,7 +60,7 @@ adb logcat -s AudioPlayer AudioRecorder
 | `usage` | 播放 | `USAGE_MEDIA` | 音频用途，13 种 SDK 场景 + 5 种系统场景见内置配置；系统场景需系统部署 |
 | `contentType` | 播放 | `CONTENT_TYPE_MUSIC` | 内容类型 |
 | `performanceMode` | 播放 | `PERFORMANCE_MODE_POWER_SAVING` | 省电 / 低延迟 |
-| `bufferMultiplier` | 两者 | `2` | 最小缓冲倍数；须为正整数，非法条目被跳过 |
+| `bufferMultiplier` | 两者 | `2` | 最小缓冲倍数；须为正整数，非法条目被跳过。播放侧下限：省电 ≥ 2（写块 2×最小缓冲）、低延迟 ≥ 1，不满足时启动报 PARAM 错误 |
 | `audioSource` | 录音 | `MIC` | 录音音源，15 种 |
 | `sampleRate` | 录音 | `48000` | 采样率（8k-192k） |
 | `channelCount` | 录音 | `2` | 仅 {1,2,8,10,12,14,16} 生效，见已知限制 |

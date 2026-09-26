@@ -3,6 +3,10 @@
   ===== Playback Configs =====
   An audioFilePath that is empty or starts with asset:// → built-in audio source, no WAV file
   needs to be pushed; regular paths like /data/xx.wav require system permission/root to read.
+  player bufferMultiplier: track buffer = multiplier x minBufferSize. Write chunks are
+  strictly 1x (LOW_LATENCY) / 2x (POWER_SAVING) minBufferSize, independent of the
+  buffer size — the multiplier only sets the buffer headroom. Minimum multiplier
+  1 / 2 respectively (the chunk must fit the buffer), recommended 2 / 4.
 -->
 <audioConfigs>
   <player>
@@ -10,7 +14,7 @@
       <usage>USAGE_MEDIA</usage>
       <contentType>CONTENT_TYPE_MUSIC</contentType>
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
-      <bufferMultiplier>2</bufferMultiplier>
+      <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
       <description>Media Playback (Power Saving Mode)</description>
     </config>
@@ -26,7 +30,7 @@
       <usage>USAGE_VOICE_COMMUNICATION</usage>
       <contentType>CONTENT_TYPE_SPEECH</contentType>
       <performanceMode>PERFORMANCE_MODE_LOW_LATENCY</performanceMode>
-      <bufferMultiplier>1</bufferMultiplier>
+      <bufferMultiplier>2</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
       <description>Voice Communication (Low Latency)</description>
     </config>
@@ -34,7 +38,7 @@
       <usage>USAGE_VOICE_COMMUNICATION_SIGNALLING</usage>
       <contentType>CONTENT_TYPE_SONIFICATION</contentType>
       <performanceMode>PERFORMANCE_MODE_LOW_LATENCY</performanceMode>
-      <bufferMultiplier>1</bufferMultiplier>
+      <bufferMultiplier>2</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
       <description>Call Signaling Audio (Low Latency)</description>
     </config>
@@ -42,7 +46,7 @@
       <usage>USAGE_ALARM</usage>
       <contentType>CONTENT_TYPE_SONIFICATION</contentType>
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
-      <bufferMultiplier>2</bufferMultiplier>
+      <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
       <description>Alarm Sound (Power Saving Mode)</description>
     </config>
@@ -50,7 +54,7 @@
       <usage>USAGE_NOTIFICATION</usage>
       <contentType>CONTENT_TYPE_SONIFICATION</contentType>
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
-      <bufferMultiplier>2</bufferMultiplier>
+      <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
       <description>Notification Sound (Power Saving Mode)</description>
     </config>
@@ -58,7 +62,7 @@
       <usage>USAGE_NOTIFICATION_RINGTONE</usage>
       <contentType>CONTENT_TYPE_SONIFICATION</contentType>
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
-      <bufferMultiplier>2</bufferMultiplier>
+      <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
       <description>Ringtone Playback (Power Saving Mode)</description>
     </config>
@@ -66,7 +70,7 @@
       <usage>USAGE_NOTIFICATION_EVENT</usage>
       <contentType>CONTENT_TYPE_SONIFICATION</contentType>
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
-      <bufferMultiplier>2</bufferMultiplier>
+      <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
       <description>Notification Event (Power Saving Mode)</description>
     </config>
@@ -74,7 +78,7 @@
       <usage>USAGE_ASSISTANCE_ACCESSIBILITY</usage>
       <contentType>CONTENT_TYPE_SPEECH</contentType>
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
-      <bufferMultiplier>2</bufferMultiplier>
+      <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
       <description>Accessibility Features (Power Saving Mode)</description>
     </config>
@@ -82,7 +86,7 @@
       <usage>USAGE_ASSISTANCE_NAVIGATION_GUIDANCE</usage>
       <contentType>CONTENT_TYPE_SPEECH</contentType>
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
-      <bufferMultiplier>2</bufferMultiplier>
+      <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
       <description>Navigation Voice (Power Saving Mode)</description>
     </config>
@@ -90,7 +94,7 @@
       <usage>USAGE_ASSISTANCE_SONIFICATION</usage>
       <contentType>CONTENT_TYPE_SONIFICATION</contentType>
       <performanceMode>PERFORMANCE_MODE_LOW_LATENCY</performanceMode>
-      <bufferMultiplier>1</bufferMultiplier>
+      <bufferMultiplier>2</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
       <description>System Alert Sound (Low Latency)</description>
     </config>
@@ -98,7 +102,7 @@
       <usage>USAGE_GAME</usage>
       <contentType>CONTENT_TYPE_MUSIC</contentType>
       <performanceMode>PERFORMANCE_MODE_LOW_LATENCY</performanceMode>
-      <bufferMultiplier>1</bufferMultiplier>
+      <bufferMultiplier>2</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
       <description>Game Audio (Low Latency)</description>
     </config>
@@ -106,7 +110,7 @@
       <usage>USAGE_ASSISTANT</usage>
       <contentType>CONTENT_TYPE_SPEECH</contentType>
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
-      <bufferMultiplier>2</bufferMultiplier>
+      <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
       <description>Voice Assistant (Power Saving Mode)</description>
     </config>
@@ -118,7 +122,7 @@
       <usage>USAGE_EMERGENCY</usage>
       <contentType>CONTENT_TYPE_SONIFICATION</contentType>
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
-      <bufferMultiplier>2</bufferMultiplier>
+      <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
       <description>Emergency Alert (System Usage) [requires system permission]</description>
     </config>
@@ -126,7 +130,7 @@
       <usage>USAGE_SAFETY</usage>
       <contentType>CONTENT_TYPE_SONIFICATION</contentType>
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
-      <bufferMultiplier>2</bufferMultiplier>
+      <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
       <description>Safety Warning (System Usage) [requires system permission]</description>
     </config>
@@ -134,7 +138,7 @@
       <usage>USAGE_VEHICLE_STATUS</usage>
       <contentType>CONTENT_TYPE_SONIFICATION</contentType>
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
-      <bufferMultiplier>2</bufferMultiplier>
+      <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
       <description>Vehicle Status (System Usage) [requires system permission]</description>
     </config>
@@ -142,7 +146,7 @@
       <usage>USAGE_ANNOUNCEMENT</usage>
       <contentType>CONTENT_TYPE_SPEECH</contentType>
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
-      <bufferMultiplier>2</bufferMultiplier>
+      <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
       <description>Announcement (System Usage) [requires system permission]</description>
     </config>
@@ -150,7 +154,7 @@
       <usage>USAGE_SPEAKER_CLEANUP</usage>
       <contentType>CONTENT_TYPE_UNKNOWN</contentType>
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
-      <bufferMultiplier>2</bufferMultiplier>
+      <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
       <description>Speaker Cleanup (System Usage) [requires system permission + feature flag]</description>
     </config>

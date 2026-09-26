@@ -60,7 +60,7 @@ adb logcat -s AudioPlayer AudioRecorder
 | `usage` | player | `USAGE_MEDIA` | audio usage; 12 scenarios in the bundled config |
 | `contentType` | player | `CONTENT_TYPE_MUSIC` | content type |
 | `performanceMode` | player | `PERFORMANCE_MODE_POWER_SAVING` | power saving / low latency |
-| `bufferMultiplier` | both | `2` | min-buffer multiplier; must be a positive integer, invalid entries are skipped |
+| `bufferMultiplier` | both | `2` | min-buffer multiplier; must be a positive integer, invalid entries are skipped. Player-side floors: power saving >= 2 (write chunk = 2x min-buffer), low latency >= 1, otherwise start fails with a PARAM error |
 | `audioSource` | recorder | `MIC` | recording source, 15 available |
 | `sampleRate` | recorder | `48000` | sample rate (8k-192k) |
 | `channelCount` | recorder | `2` | only {1,2,8,10,12,14,16} take effect, see Known Limitations |
