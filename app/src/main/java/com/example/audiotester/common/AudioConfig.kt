@@ -21,6 +21,7 @@ data class AudioConfig(
     val audioFormat: Int = 16,
     val bufferMultiplier: Int = 2,
     val audioFilePath: String = "",
+    val preferredDeviceAddress: String = "",
     val description: String = "Default Configuration",
 ) {
     /** True when audioFilePath is used as-is; empty/asset:// is a sentinel (player: built-in source, recorder: auto-generated path) */
@@ -83,6 +84,8 @@ data class AudioConfig(
                         audioFormat = c.childInt("audioFormat", DEFAULT.audioFormat),
                         bufferMultiplier = c.childInt("bufferMultiplier", DEFAULT.bufferMultiplier),
                         audioFilePath = c.childText("audioFilePath", DEFAULT.audioFilePath),
+                        // Player-only routing override: empty (= missing/blank element) keeps default routing
+                        preferredDeviceAddress = c.childText("preferredDeviceAddress", DEFAULT.preferredDeviceAddress),
                         description = c.childText("description", "Custom configuration")
                     )
                 }.onFailure {

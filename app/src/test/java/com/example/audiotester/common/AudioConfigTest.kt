@@ -187,6 +187,46 @@ class AudioConfigTest {
     }
 
     @Test
+    fun preferredDeviceAddress_missingOrEmpty_meansDisabled() {
+        // Missing, empty, and self-closing elements all parse to "" (= default routing); only
+        // a non-empty value enables setPreferredDevice routing in the player. The self-closing
+        // form is what the IDE's "XML tag has empty body" inspection nudges the asset file to.
+        val configs = AudioConfig.parseConfigs(
+            stream("""
+                <audioConfigs>
+                  <player>
+                    <config><description>no element</description></config>
+                    <config><preferredDeviceAddress></preferredDeviceAddress><description>empty</description></config>
+                    <config><preferredDeviceAddress /><description>self-closing</description></config>
+                  </player>
+                </audioConfigs>
+            """.trimIndent()), "player"
+        )
+        assertEquals(3, configs.size)
+        assertEquals("", configs[0].preferredDeviceAddress)
+        assertEquals("", configs[1].preferredDeviceAddress)
+        assertEquals("", configs[2].preferredDeviceAddress)
+    }
+
+    @Test
+    fun preferredDeviceAddress_parsedWhenPresent() {
+        val configs = AudioConfig.parseConfigs(
+            stream("""
+                <audioConfigs>
+                  <player>
+                    <config>
+                      <preferredDeviceAddress>bus0_media_out</preferredDeviceAddress>
+                      <description>routed</description>
+                    </config>
+                  </player>
+                </audioConfigs>
+            """.trimIndent()), "player"
+        )
+        assertEquals(1, configs.size)
+        assertEquals("bus0_media_out", configs[0].preferredDeviceAddress)
+    }
+
+    @Test
     fun oversizedBufferMultiplier_skipsEntry() {
         // Without an upper bound a huge multiplier overflows minBufferSize * multiplier to
         // negative at start time; rejected at parse time instead (100 accepted, 101 skipped)

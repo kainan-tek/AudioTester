@@ -147,18 +147,22 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
             minBufferSizeBytes = minBufferSize
             val bufferSize = minBufferSize * currentConfig.bufferMultiplier
 
-            audioTrack = AudioTrack.Builder().setAudioAttributes(audioAttributes).setAudioFormat(
-                AudioFormat.Builder().setSampleRate(wavFile.sampleRate).setChannelMask(channelMask)
+            val track = AudioTrack.Builder().setAudioAttributes(audioAttributes).setAudioFormat(
+                AudioFormat.Builder().setSampleRate(wavFile.sampleRate)
+                    .setChannelMask(channelMask)
                     .setEncoding(audioFormat).build()
             ).setBufferSizeInBytes(bufferSize)
                 .setTransferMode(AudioTrack.MODE_STREAM)
                 .setPerformanceMode(AudioConstants.getPerformanceMode(currentConfig.performanceMode))
                 .build()
+            audioTrack = track
 
-            if (audioTrack?.state != AudioTrack.STATE_INITIALIZED) {
-                handleError(AudioErrorType.STREAM, "AudioTrack initialization failed, state: ${audioTrack?.state}")
+            if (track.state != AudioTrack.STATE_INITIALIZED) {
+                handleError(AudioErrorType.STREAM, "AudioTrack initialization failed, state: ${track.state}")
                 return false
             }
+
+            if (!applyPreferredDevice(track)) return false
 
             Log.i(
                 TAG,
@@ -171,6 +175,38 @@ class AudioPlayer(private val context: Context) : AudioEngineBase() {
             handleError(AudioErrorType.STREAM, "AudioTrack creation failed: ${e.message}")
             return false
         }
+    }
+
+    /**
+     * Preferred-device routing (player-only config field): a non-empty preferredDeviceAddress
+     * routes the track to the output device whose AudioDeviceInfo.getAddress() matches exactly
+     * (e.g. an AAOS bus address "bus0_media_out"); empty keeps default routing. A configured
+     * address that matches no output device — or a setPreferredDevice rejection — fails the
+     * case loudly. Runs after the track is initialized, before play(); must be called under
+     * the engine lock (it reads currentConfig). Note the accepted hint is not verified against
+     * the actual sink: routing effectiveness is observed on the device (the routed device /
+     * the bus output itself), consistent with this being a manual listening test.
+     */
+    private fun applyPreferredDevice(track: AudioTrack): Boolean {
+        val address = currentConfig.preferredDeviceAddress
+        if (address.isEmpty()) return true
+
+        // Fetched here rather than via the audioManager field: the field IS assigned by now
+        // (requestAudioFocus's first statement, before the system-usage early return) — the
+        // point is keeping routing decoupled from that call order, not nullability
+        val manager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val device = AudioConstants.findOutputDeviceByAddress(
+            manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS), address)
+        if (device == null) {
+            handleError(AudioErrorType.PARAM, "Preferred output device not found: $address")
+            return false
+        }
+        if (!track.setPreferredDevice(device)) {
+            handleError(AudioErrorType.PARAM, "setPreferredDevice rejected for: $address")
+            return false
+        }
+        Log.i(TAG, "Preferred device: type=${device.type}, address='${device.address}', name=${device.productName}")
+        return true
     }
 
     private fun validateAudioParameters(wavFile: WavFile): Boolean {

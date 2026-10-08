@@ -120,3 +120,19 @@ data size = 0xFFFFFFFF 的流式 WAV，`duration` 按无符号值计算得出约
 ## 22. readLittleEndianInt 保留 offset 参数 + SameParameterValue 豁免（审查意见，评估后拒绝）
 
 审查建议删参硬编码 4（两个调用点均传 4）。拒绝理由：二进制解析代码中调用点显式 offset 是自文档（与 `readLittleEndianShort(fmt, 2)/(fmt, 14)` 及 `String(bytes, offset, 4, …)` 的既有风格一致），删参后结构知识被藏进函数体、出现魔法数，且与紧邻的 Short helper（多 offset、参数必要）形成特例成员。`SameParameterValue` 不检测错误 offset（其语义是"所有调用点同值 → 建议删参"），禁用它未关闭任何正确性防线；豁免的代价仅 1 注解 + 2 行注释。
+
+## 23. preferredDeviceAddress 的路由生效性不做自动校验（审查意见，评估后拒绝）
+
+`applyPreferredDevice` 只验证设备存在且 `setPreferredDevice` 返回 true，不校验实际 sink（曾实现 `awaitPreferredRouting` 在 play() 后限时轮询 `getRoutedDevice`，评估后移除）。审查建议保留 sink 校验以防策略覆盖导致假阳性。拒绝理由：本工具定位人工听测，测试员就在目标 bus 对应的输出端旁听；该字段的典型环境是系统部署（bus 路由被尊重，普通安装上 car audio policy 可能覆盖已写进 README 与 asset 注释）；自动校验引入异步轮询与超时阈值两种新失败模式（系统负载下路由事件迟到即误报 PARAM），成功路径上每次播放都白付轮询延迟。实际路由的人工观测路径：logcat `Preferred device:` 行、`dumpsys media.audio_policy`（routing patch 的 sink 端口）、`dumpsys audio`（player piid 的 DeviceId → 端口映射）。
+
+同一主题：两条响亮失败路径（设备不存在 / `setPreferredDevice` 被拒）无引擎级 JVM 测试——`initializeAudio` 中途构造真实 `AudioTrack`，JVM 侧无法覆盖 track 创建之后的路径，引擎级验证依赖设备测试（AAOS 模拟器已验证：空字段时 media 默认走 bus0；配置 bus5 后 routing patch 实际落到 bus5_alarm_out；不存在的 bus99 报 PARAM 拒播）。
+
+## 24. recorder 段的 preferredDeviceAddress 解析但被静默忽略（审查发现，评估后不修）
+
+`AudioConfig` 的 superset 解析器对 recorder 段同样接受该字段，`AudioRecorder` 不读取——与 usage/performanceMode 被录音段解析但忽略的既有模式一致，但该字段填进 recorder case 看似合理（`AudioRecord.setPreferredDevice` 存在），误导性更强。
+
+不修理由：解析器 section 无关是既有架构；拒绝带该字段的 recorder 条目需解析边界感知 section 语义（架构复杂化），支持录音输入路由则是新功能需求而非缺陷修复。文档已三处标注「仅播放侧」（README 中/英、asset 头注释）；残余风险是测试者配错段后误以为路由生效，缓解依赖文档可见性，与 §19 的 system-usage 自标注同思路。
+
+## 25. applyPreferredDevice 自取 AudioManager 而非复用引擎字段（审查意见，评估后拒绝）
+
+审查两次指出 `context.getSystemService` 与 `requestAudioFocus` 首行赋值的 `audioManager` 字段重复（该赋值在 system-usage 提前返回之前，路由处字段必然非空）。拒绝理由：自取使路由步骤与 `requestAudioFocus` 的内部实现顺序解耦，可空类型字段复用需 `!!` 或判空分支，成本一行；注释已如实锚定理由（要点是顺序耦合而非 null 性）。

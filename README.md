@@ -66,6 +66,7 @@ adb logcat -s AudioPlayer AudioRecorder
 | `channelCount` | 录音 | `2` | 仅 {1,2,8,10,12,14,16} 生效，见已知限制 |
 | `audioFormat` | 录音 | `16` | 位深 8/16/24/32 |
 | `audioFilePath` | 两者 | 空 | 播放：空 = 内置音源，或 `asset://…`、`/data/xx.wav`；录音：空 = 私有目录自动命名，或固定输出路径 |
+| `preferredDeviceAddress` | 播放 | 空 | 按地址精确匹配输出设备并 `setPreferredDevice` 路由（如 AAOS bus 地址 `bus0_media_out`）；空 = 默认路由。无匹配设备或 `setPreferredDevice` 被拒 → 该 case 报 PARAM 错误，不静默回退。仅播放侧：recorder 段配置该字段会被解析但忽略。注意：提示被接受不代表策略必然遵从——普通安装可能被 car audio policy 覆盖（系统部署下最可靠），实际路由需在设备上观察 |
 | `description` | 两者 | `Custom configuration` | Spinner 显示名 |
 
 ### 示例

@@ -66,6 +66,7 @@ adb logcat -s AudioPlayer AudioRecorder
 | `channelCount` | recorder | `2` | only {1,2,8,10,12,14,16} take effect, see Known Limitations |
 | `audioFormat` | recorder | `16` | bit depth 8/16/24/32 |
 | `audioFilePath` | both | empty | playback: empty = built-in source, or `asset://…` / `/data/xx.wav`; recording: empty = auto-named private dir, or a fixed output path |
+| `preferredDeviceAddress` | player | empty | exact-match an output device by address and route via `setPreferredDevice` (e.g. AAOS bus address `bus0_media_out`); empty = default routing. No matching device or a rejected call → the case fails with a PARAM error (no silent fallback). Player configs only: parsed but ignored in the recorder section. Note: an accepted hint is not guaranteed to be honored — car audio policy may override it on normal installs (most reliable on system deployments); observe the actual routing on the device |
 | `description` | both | `Custom configuration` | name shown in the Spinner |
 
 ### Example

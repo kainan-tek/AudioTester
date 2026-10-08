@@ -7,6 +7,13 @@
   strictly 1x (LOW_LATENCY) / 2x (POWER_SAVING) minBufferSize, independent of the
   buffer size — the multiplier only sets the buffer headroom. Minimum multiplier
   1 / 2 respectively (the chunk must fit the buffer), recommended 2 / 4.
+  player preferredDeviceAddress (optional; player configs only — parsed but ignored in the
+  recorder section): route the track to the output device whose AudioDeviceInfo.getAddress()
+  matches exactly, e.g. an AAOS bus address "bus0_media_out". Empty/missing → default routing.
+  The case fails with a PARAM error (no silent fallback) when the device is not found or
+  setPreferredDevice is rejected; whether the policy actually honors the hint must be observed
+  on the device (car audio policy may override it on normal installs — most reliable on
+  system deployments). Every case below carries the field empty; fill in an address to route.
 -->
 <audioConfigs>
   <player>
@@ -16,6 +23,7 @@
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
       <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <preferredDeviceAddress />
       <description>Media Playback (Power Saving Mode)</description>
     </config>
     <config>
@@ -24,6 +32,7 @@
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
       <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>/data/float_96k_2ch.wav</audioFilePath>
+      <preferredDeviceAddress />
       <description>Hi-Res Media Playback (96kHz Stereo 32-bit Float)</description>
     </config>
     <config>
@@ -32,6 +41,7 @@
       <performanceMode>PERFORMANCE_MODE_LOW_LATENCY</performanceMode>
       <bufferMultiplier>2</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <preferredDeviceAddress />
       <description>Voice Communication (Low Latency)</description>
     </config>
     <config>
@@ -40,6 +50,7 @@
       <performanceMode>PERFORMANCE_MODE_LOW_LATENCY</performanceMode>
       <bufferMultiplier>2</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <preferredDeviceAddress />
       <description>Call Signaling Audio (Low Latency)</description>
     </config>
     <config>
@@ -48,6 +59,7 @@
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
       <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <preferredDeviceAddress />
       <description>Alarm Sound (Power Saving Mode)</description>
     </config>
     <config>
@@ -56,6 +68,7 @@
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
       <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <preferredDeviceAddress />
       <description>Notification Sound (Power Saving Mode)</description>
     </config>
     <config>
@@ -64,6 +77,7 @@
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
       <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <preferredDeviceAddress />
       <description>Ringtone Playback (Power Saving Mode)</description>
     </config>
     <config>
@@ -72,6 +86,7 @@
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
       <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <preferredDeviceAddress />
       <description>Notification Event (Power Saving Mode)</description>
     </config>
     <config>
@@ -80,6 +95,7 @@
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
       <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <preferredDeviceAddress />
       <description>Accessibility Features (Power Saving Mode)</description>
     </config>
     <config>
@@ -88,6 +104,7 @@
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
       <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <preferredDeviceAddress />
       <description>Navigation Voice (Power Saving Mode)</description>
     </config>
     <config>
@@ -96,6 +113,7 @@
       <performanceMode>PERFORMANCE_MODE_LOW_LATENCY</performanceMode>
       <bufferMultiplier>2</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <preferredDeviceAddress />
       <description>System Alert Sound (Low Latency)</description>
     </config>
     <config>
@@ -104,6 +122,7 @@
       <performanceMode>PERFORMANCE_MODE_LOW_LATENCY</performanceMode>
       <bufferMultiplier>2</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <preferredDeviceAddress />
       <description>Game Audio (Low Latency)</description>
     </config>
     <config>
@@ -112,6 +131,7 @@
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
       <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <preferredDeviceAddress />
       <description>Voice Assistant (Power Saving Mode)</description>
     </config>
 
@@ -124,6 +144,7 @@
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
       <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <preferredDeviceAddress />
       <description>Emergency Alert (System Usage) [requires system permission]</description>
     </config>
     <config>
@@ -132,6 +153,7 @@
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
       <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <preferredDeviceAddress />
       <description>Safety Warning (System Usage) [requires system permission]</description>
     </config>
     <config>
@@ -140,6 +162,7 @@
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
       <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <preferredDeviceAddress />
       <description>Vehicle Status (System Usage) [requires system permission]</description>
     </config>
     <config>
@@ -148,6 +171,7 @@
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
       <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <preferredDeviceAddress />
       <description>Announcement (System Usage) [requires system permission]</description>
     </config>
     <config>
@@ -156,6 +180,7 @@
       <performanceMode>PERFORMANCE_MODE_POWER_SAVING</performanceMode>
       <bufferMultiplier>4</bufferMultiplier>
       <audioFilePath>asset://sample/48k_2ch_16bit.wav</audioFilePath>
+      <preferredDeviceAddress />
       <description>Speaker Cleanup (System Usage) [requires system permission + feature flag]</description>
     </config>
   </player>

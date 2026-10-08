@@ -1,6 +1,7 @@
 package com.example.audiotester.common
 
 import android.media.AudioAttributes
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
@@ -122,6 +123,11 @@ object AudioConstants {
         performanceMode !in PerformanceMode.MAP -> "performanceMode: $performanceMode"
         else -> null
     }
+
+    /** First output device whose address equals [address] exactly (no normalization — addresses
+     *  are platform-defined identifiers, e.g. an AAOS bus address "bus0_media_out"), or null */
+    fun findOutputDeviceByAddress(devices: Array<AudioDeviceInfo>, address: String): AudioDeviceInfo? =
+        devices.firstOrNull { it.address == address }
 
     /** System usage start value (matches @hide AudioAttributes.SYSTEM_USAGE_OFFSET) */
     private const val SYSTEM_USAGE_START = 1000
