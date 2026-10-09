@@ -39,13 +39,23 @@ class PlayerFragment : AudioTestFragment() {
     override fun permissionsForCurrentConfig(): Array<String> =
         if (viewModel.currentConfig.value?.hasUsableFilePath == true) storagePermissions() else emptyArray()
 
-    override fun formatInfo(config: AudioConfig): String {
-        val path = AudioConstants.resolvePlaybackSource(config.audioFilePath)
-        val fileDisplay = if (AudioConstants.isBundledAssetSource(path)) "Bundled sample ($path)" else path
-        return "Current Config: ${config.description}\n" +
-            "Usage: ${config.usage} | ${config.contentType}\n" +
-            "Mode: ${config.performanceMode}\n" +
-            "File: $fileDisplay"
+    override fun formatInfo(config: AudioConfig): String = buildInfoText(config)
+
+    companion object {
+        /** Pure JVM-testable core of the info panel: mirrors what the engine actually does
+         *  (the resolvePlaybackSource contract) — a configured routing request surfaces here
+         *  so the tester sees what was requested without reopening the XML or logcat */
+        fun buildInfoText(config: AudioConfig): String {
+            val path = AudioConstants.resolvePlaybackSource(config.audioFilePath)
+            val fileDisplay = if (AudioConstants.isBundledAssetSource(path)) "Bundled sample ($path)" else path
+            val routeDisplay = if (config.preferredDeviceAddress.isEmpty()) ""
+                else "\nRoute: ${config.preferredDeviceAddress}"
+            return "Current Config: ${config.description}\n" +
+                "Usage: ${config.usage} | ${config.contentType}\n" +
+                "Mode: ${config.performanceMode}" +
+                routeDisplay +
+                "\nFile: $fileDisplay"
+        }
     }
 
     override fun friendlyMessage(type: AudioErrorType): String = when (type) {
